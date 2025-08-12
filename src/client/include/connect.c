@@ -7,16 +7,6 @@
 
 #include "connect.h"
 
-// get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
-{
-    if (sa->sa_family == AF_INET) {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
-    }
-
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
-
 /*
     Basic abstraction to connect to a valid host
 
@@ -51,7 +41,7 @@ int connect_to_host(const char *hostname) {
             continue;
         }
 
-        print_ip("client: connecting to", p, true);
+        print_ip("client: connecting to", p->ai_family, p->ai_addr, true);
 
         if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
             perror("client: connect");
@@ -63,35 +53,15 @@ int connect_to_host(const char *hostname) {
     }
 
     if (p == NULL) {
-        print_ip("client: failed to connect to", p, false);
+        print_ip("client: failed to connect to", p->ai_family, p->ai_addr, false);
         return -2;
     }
 
-    print_ip("client: successfully connected to", p, true);
+    print_ip("client: successfully connected to", p->ai_family, p->ai_addr, true);
 
     freeaddrinfo(servinfo);
 
     return sockfd;
-}
-
-/*
-    Prints the IP
-*/
-void print_ip(char *message, struct addrinfo *p, bool stdout) {
-    
-    char s[INET6_ADDRSTRLEN];
-
-    if (message == NULL) {
-        message = "IP:";
-    }
-
-    // Get the address (doesn't matter if its IPv4 or IPv6)
-    inet_ntop(p->ai_family,
-            get_in_addr((struct sockaddr *)p->ai_addr),
-            s, sizeof s);
-
-    if (stdout) printf("%s %s\n", message, s);
-    else fprintf(stderr, "%s %s\n", message, s);
 }
 
 /*

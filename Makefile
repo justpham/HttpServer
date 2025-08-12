@@ -8,8 +8,11 @@ CC = gcc
 CXX = g++
 CFLAGS = -Wall -Wextra -std=c99
 CXXFLAGS = -Wall -Wextra -std=c++11
-CLIENT_INCLUDES = -I src$(SLASH)client$(SLASH)include
+
+# Libraries
 INCLUDES = -I src$(SLASH)include
+CLIENT_INCLUDES = -I src$(SLASH)client$(SLASH)include
+SERVER_INCLUDES = -I src$(SLASH)server$(SLASH)include
 
 # CppUTest settings
 CPPUTEST_HOME = /usr
@@ -17,8 +20,12 @@ CPPFLAGS += -I$(CPPUTEST_HOME)/include
 CXXFLAGS += -include $(CPPUTEST_HOME)/include/CppUTest/MemoryLeakDetectorNewMacros.h
 LD_LIBRARIES = -L$(CPPUTEST_HOME)/lib/aarch64-linux-gnu -lCppUTest -lCppUTestExt
 
-# Source files
-CLIENT_SOURCES = src$(SLASH)client$(SLASH)include$(SLASH)connect.c
+# Source Files
+COMMON_SOURCES = src$(SLASH)include$(SLASH)ip_helper.c
+CLIENT_SOURCES = src$(SLASH)client$(SLASH)include$(SLASH)connect.c $(COMMON_SOURCES)
+SERVER_SOURCES = src$(SLASH)server$(SLASH)include$(SLASH)connect.c $(COMMON_SOURCES)
+
+# Test Source Files
 TEST_SOURCES = $(wildcard $(TEST_DIRECTORY)$(SLASH)test_*.cpp)
 TEST_OBJECTS = $(TEST_SOURCES:$(TEST_DIRECTORY)/%.cpp=$(TEST_BUILD_DIRECTORY)/%.o)
 
@@ -28,19 +35,22 @@ client: $(BUILD_DIRECTORY)
 	$(CC) $(CFLAGS) src$(SLASH)client$(SLASH)client.c $(CLIENT_SOURCES) $(CLIENT_INCLUDES) $(INCLUDES) -o $(BUILD_DIRECTORY)$(SLASH)client
 
 server: $(BUILD_DIRECTORY)
-	$(CC) $(CFLAGS) src$(SLASH)server$(SLASH)server.c $(INCLUDES) -o $(BUILD_DIRECTORY)$(SLASH)server
+	$(CC) $(CFLAGS) src$(SLASH)server$(SLASH)server.c $(SERVER_SOURCES) $(SERVER_INCLUDES) $(INCLUDES) -o $(BUILD_DIRECTORY)$(SLASH)server
 
 # Test targets
 test: $(TEST_BUILD_DIRECTORY)$(SLASH)test_runner
 	./$(TEST_BUILD_DIRECTORY)$(SLASH)test_runner
 
-$(TEST_BUILD_DIRECTORY)$(SLASH)test_runner: $(TEST_OBJECTS) $(TEST_BUILD_DIRECTORY)$(SLASH)connect.o
+$(TEST_BUILD_DIRECTORY)$(SLASH)test_runner: $(TEST_OBJECTS) $(TEST_BUILD_DIRECTORY)$(SLASH)connect.o $(TEST_BUILD_DIRECTORY)$(SLASH)ip_helper.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LD_LIBRARIES)
 
 $(TEST_BUILD_DIRECTORY)$(SLASH)%.o: $(TEST_DIRECTORY)$(SLASH)%.cpp | $(TEST_BUILD_DIRECTORY)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(INCLUDES) -c $< -o $@
 
 $(TEST_BUILD_DIRECTORY)$(SLASH)connect.o: src$(SLASH)client$(SLASH)include$(SLASH)connect.c | $(TEST_BUILD_DIRECTORY)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(TEST_BUILD_DIRECTORY)$(SLASH)ip_helper.o: src$(SLASH)include$(SLASH)ip_helper.c | $(TEST_BUILD_DIRECTORY)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 $(BUILD_DIRECTORY):

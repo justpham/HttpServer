@@ -14,24 +14,13 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <stdbool.h>
 #include "macros.h"
+#include "ip_helper.h"
 
 #define RECV_RATE           100     // max number of bytes we can get at once 
 
-// Function declarations
-void *get_in_addr(
-    struct sockaddr *sa
-);
-
 int connect_to_host (
     const char *hostname
-);
-
-void print_ip(
-    char *message, 
-    struct addrinfo *p, 
-    bool stdout
 );
 
 int recieve_data(
