@@ -1,5 +1,5 @@
-#ifndef CONNECT_H
-#define CONNECT_H
+
+#pragma once
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,8 +12,8 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <stdbool.h>
+#include "macros.h"
 
-#define PORT                "3490"  // the port client will be connecting to 
 #define RECV_RATE           100     // max number of bytes we can get at once 
 
 // Function declarations
@@ -36,6 +36,4 @@ int recieve_data(
     char* buf, 
     int maxLength
 );
-
-#endif // CONNECT_H
 

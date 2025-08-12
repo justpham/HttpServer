@@ -8,7 +8,8 @@ CC = gcc
 CXX = g++
 CFLAGS = -Wall -Wextra -std=c99
 CXXFLAGS = -Wall -Wextra -std=c++11
-INCLUDES = -I src$(SLASH)client$(SLASH)include
+CLIENT_INCLUDES = -I src$(SLASH)client$(SLASH)include
+INCLUDES = -I src$(SLASH)include
 
 # CppUTest settings
 CPPUTEST_HOME = /usr
@@ -24,10 +25,10 @@ TEST_OBJECTS = $(TEST_SOURCES:$(TEST_DIRECTORY)/%.cpp=$(TEST_BUILD_DIRECTORY)/%.
 all: $(BUILD_DIRECTORY) client server
 
 client: $(BUILD_DIRECTORY)
-	$(CC) $(CFLAGS) src$(SLASH)client$(SLASH)client.c $(CLIENT_SOURCES) $(INCLUDES) -o $(BUILD_DIRECTORY)$(SLASH)client
+	$(CC) $(CFLAGS) src$(SLASH)client$(SLASH)client.c $(CLIENT_SOURCES) $(CLIENT_INCLUDES) $(INCLUDES) -o $(BUILD_DIRECTORY)$(SLASH)client
 
 server: $(BUILD_DIRECTORY)
-	$(CC) $(CFLAGS) src$(SLASH)server$(SLASH)server.c -o $(BUILD_DIRECTORY)$(SLASH)server
+	$(CC) $(CFLAGS) src$(SLASH)server$(SLASH)server.c $(INCLUDES) -o $(BUILD_DIRECTORY)$(SLASH)server
 
 # Test targets
 test: $(TEST_BUILD_DIRECTORY)$(SLASH)test_runner

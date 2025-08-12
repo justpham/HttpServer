@@ -2,6 +2,8 @@
 ** server.c -- a stream socket server demo
 */
 
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -14,8 +16,7 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
-
-#define PORT "3490"  // the port users will be connecting to
+#include "macros.h"
 
 #define BACKLOG 10   // how many pending connections queue will hold
 
