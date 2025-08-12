@@ -1,5 +1,5 @@
 /*
-    Implementation for socket and connect abstractions
+    Implementation for socket and connect abstractions for a client
 */
 
 

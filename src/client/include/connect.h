@@ -1,3 +1,6 @@
+/*
+    Header File for socket and connect abstractions for a client
+*/
 
 #pragma once
 
