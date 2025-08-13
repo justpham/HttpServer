@@ -136,7 +136,14 @@ int parse_request(
             fprintf(stderr, "Failed to parse header line: '%s'\n", line_buffer);
         }
     }
-    
+
+    // Check if Host is present
+    const char* host_str = get_header_value(request, "Host");
+    if (!host_str) {
+        fprintf(stderr, "Missing Host header\n");
+        return -6;
+    }
+
     // Extract Content-Length if present
     const char* content_length_str = get_header_value(request, "Content-Length");
     if (content_length_str) {

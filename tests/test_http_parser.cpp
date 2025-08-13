@@ -159,12 +159,8 @@ TEST(HttpParserTests, ParseRequestWithoutHeaders)
     
     int result = parse_request(raw_request, &request);
     
-    CHECK_EQUAL(0, result);
-    STRCMP_EQUAL("GET", request.method);
-    STRCMP_EQUAL("/", request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", request.http_version);
-    CHECK_EQUAL(0, request.header_count);
-    CHECK_EQUAL(0, request.body_length);
+    // Should return error (-6) because Host header is missing
+    CHECK_EQUAL(-6, result);
 }
 
 TEST(HttpParserTests, ParseRequestWithContentLengthMismatch)
@@ -243,4 +239,161 @@ TEST(HttpParserTests, ParseValidAbsoluteForm)
     STRCMP_EQUAL("GET", request.method);
     STRCMP_EQUAL("https://example.com/path", request.request_target);
     STRCMP_EQUAL("HTTP/1.1", request.http_version);
+}
+
+// Host Header Validation Tests
+TEST(HttpParserTests, ParseRequestMissingHostHeader)
+{
+    const char* raw_request = 
+        "GET /path HTTP/1.1\r\n"
+        "User-Agent: TestAgent\r\n"
+        "Content-Type: text/html\r\n"
+        "\r\n";
+    
+    int result = parse_request(raw_request, &request);
+    
+    // Should return error (-6) because Host header is missing
+    CHECK_EQUAL(-6, result);
+}
+
+TEST(HttpParserTests, ParseRequestWithValidHostHeader)
+{
+    const char* raw_request = 
+        "GET /path HTTP/1.1\r\n"
+        "Host: example.com\r\n"
+        "User-Agent: TestAgent\r\n"
+        "\r\n";
+    
+    int result = parse_request(raw_request, &request);
+    
+    // Should succeed with valid Host header
+    CHECK_EQUAL(0, result);
+    STRCMP_EQUAL("GET", request.method);
+    STRCMP_EQUAL("/path", request.request_target);
+    
+    const char* host = get_header_value(&request, "Host");
+    STRCMP_EQUAL("example.com", host);
+}
+
+TEST(HttpParserTests, ParseRequestWithHostHeaderAndPort)
+{
+    const char* raw_request = 
+        "GET /api HTTP/1.1\r\n"
+        "Host: localhost:8080\r\n"
+        "Accept: application/json\r\n"
+        "\r\n";
+    
+    int result = parse_request(raw_request, &request);
+    
+    // Should succeed with Host header containing port
+    CHECK_EQUAL(0, result);
+    
+    const char* host = get_header_value(&request, "Host");
+    STRCMP_EQUAL("localhost:8080", host);
+}
+
+TEST(HttpParserTests, ParseRequestWithEmptyHostHeader)
+{
+    const char* raw_request = 
+        "GET /path HTTP/1.1\r\n"
+        "Host: \r\n"
+        "User-Agent: TestAgent\r\n"
+        "\r\n";
+    
+    int result = parse_request(raw_request, &request);
+    
+    // Should return error (-6) because empty Host header fails to parse
+    // and then Host header is considered missing
+    CHECK_EQUAL(-6, result);
+}
+
+TEST(HttpParserTests, ParseRequestWithMinimalHostHeader)
+{
+    const char* raw_request = 
+        "GET /path HTTP/1.1\r\n"
+        "Host: x\r\n"
+        "User-Agent: TestAgent\r\n"
+        "\r\n";
+    
+    int result = parse_request(raw_request, &request);
+    
+    // Should succeed with minimal Host header value
+    CHECK_EQUAL(0, result);
+    
+    const char* host = get_header_value(&request, "Host");
+    STRCMP_EQUAL("x", host);
+}
+
+TEST(HttpParserTests, ParseRequestHostHeaderCaseInsensitive)
+{
+    const char* raw_request = 
+        "GET /path HTTP/1.1\r\n"
+        "host: example.com\r\n"
+        "User-Agent: TestAgent\r\n"
+        "\r\n";
+    
+    int result = parse_request(raw_request, &request);
+    
+    // Should succeed - Host header lookup is case insensitive
+    CHECK_EQUAL(0, result);
+    
+    const char* host1 = get_header_value(&request, "Host");
+    const char* host2 = get_header_value(&request, "host");
+    const char* host3 = get_header_value(&request, "HOST");
+    
+    STRCMP_EQUAL("example.com", host1);
+    STRCMP_EQUAL("example.com", host2);
+    STRCMP_EQUAL("example.com", host3);
+}
+
+TEST(HttpParserTests, ParseRequestMultipleHostHeaders)
+{
+    const char* raw_request = 
+        "GET /path HTTP/1.1\r\n"
+        "Host: first.com\r\n"
+        "Host: second.com\r\n"
+        "User-Agent: TestAgent\r\n"
+        "\r\n";
+    
+    int result = parse_request(raw_request, &request);
+    
+    // Should succeed - first Host header will be found
+    CHECK_EQUAL(0, result);
+    
+    const char* host = get_header_value(&request, "Host");
+    STRCMP_EQUAL("first.com", host);
+}
+
+TEST(HttpParserTests, ParseRequestHostWithIPv4)
+{
+    const char* raw_request = 
+        "GET /path HTTP/1.1\r\n"
+        "Host: 192.168.1.1:8080\r\n"
+        "User-Agent: TestAgent\r\n"
+        "\r\n";
+    
+    int result = parse_request(raw_request, &request);
+    
+    // Should succeed with IPv4 address in Host header
+    CHECK_EQUAL(0, result);
+    
+    const char* host = get_header_value(&request, "Host");
+    STRCMP_EQUAL("192.168.1.1:8080", host);
+}
+
+TEST(HttpParserTests, ParseRequestHostWithIPv6)
+{
+    const char* raw_request = 
+        "GET /path HTTP/1.1\r\n"
+        "Host: [::1]:8080\r\n"
+        "User-Agent: TestAgent\r\n"
+        "\r\n";
+    
+    int result = parse_request(raw_request, &request);
+    
+    // Should succeed with IPv6 address in Host header
+    CHECK_EQUAL(0, result);
+    
+    const char* host = get_header_value(&request, "Host");
+    STRCMP_EQUAL("[::1]:8080", host);
 }
