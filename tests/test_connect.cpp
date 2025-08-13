@@ -2,7 +2,8 @@
 #include "CppUTest/CommandLineTestRunner.h"
 
 extern "C" {
-    #include "connect.h"
+    #include "ip_helper.h"
+    #include "../src/client/include/connect.h"
 }
 
 TEST_GROUP(ConnectTests)
