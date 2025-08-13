@@ -21,7 +21,7 @@ CXXFLAGS += -include $(CPPUTEST_HOME)/include/CppUTest/MemoryLeakDetectorNewMacr
 LD_LIBRARIES = -L$(CPPUTEST_HOME)/lib/aarch64-linux-gnu -lCppUTest -lCppUTestExt
 
 # Source Files
-COMMON_SOURCES = src$(SLASH)include$(SLASH)ip_helper.c
+COMMON_SOURCES = src$(SLASH)include$(SLASH)ip_helper.c src$(SLASH)include$(SLASH)cJSON.c
 CLIENT_SOURCES = src$(SLASH)client$(SLASH)include$(SLASH)connect.c $(COMMON_SOURCES)
 SERVER_SOURCES = src$(SLASH)server$(SLASH)include$(SLASH)connect.c $(COMMON_SOURCES)
 
@@ -41,7 +41,7 @@ server: $(BUILD_DIRECTORY)
 test: $(TEST_BUILD_DIRECTORY)$(SLASH)test_runner
 	./$(TEST_BUILD_DIRECTORY)$(SLASH)test_runner
 
-$(TEST_BUILD_DIRECTORY)$(SLASH)test_runner: $(TEST_OBJECTS) $(TEST_BUILD_DIRECTORY)$(SLASH)connect.o $(TEST_BUILD_DIRECTORY)$(SLASH)ip_helper.o
+$(TEST_BUILD_DIRECTORY)$(SLASH)test_runner: $(TEST_OBJECTS) $(TEST_BUILD_DIRECTORY)$(SLASH)connect.o $(TEST_BUILD_DIRECTORY)$(SLASH)ip_helper.o $(TEST_BUILD_DIRECTORY)$(SLASH)cJSON.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LD_LIBRARIES)
 
 $(TEST_BUILD_DIRECTORY)$(SLASH)%.o: $(TEST_DIRECTORY)$(SLASH)%.cpp | $(TEST_BUILD_DIRECTORY)
@@ -51,6 +51,9 @@ $(TEST_BUILD_DIRECTORY)$(SLASH)connect.o: src$(SLASH)client$(SLASH)include$(SLAS
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 $(TEST_BUILD_DIRECTORY)$(SLASH)ip_helper.o: src$(SLASH)include$(SLASH)ip_helper.c | $(TEST_BUILD_DIRECTORY)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(TEST_BUILD_DIRECTORY)$(SLASH)cJSON.o: src$(SLASH)include$(SLASH)cJSON.c | $(TEST_BUILD_DIRECTORY)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 $(BUILD_DIRECTORY):
