@@ -7,16 +7,25 @@
 const char* read_line(const char* str, char* buffer, size_t bufsize) {
     if (!str || !*str) return NULL;
     size_t i = 0;
-    while (str[i] && str[i] != '\n' && i < bufsize - 1) {
+    
+    // Look for CRLF sequence only
+    while (str[i] && i < bufsize - 1) {
+        // Check if we found CRLF (make sure both characters exist)
+        if (str[i] == '\r' && str[i + 1] && str[i + 1] == '\n') {
+            break;
+        }
         buffer[i] = str[i];
         i++;
     }
     buffer[i] = '\0';
 
-    if (i > 0 && buffer[i - 1] == '\r') buffer[i - 1] = '\0';
-
-    if (str[i] == '\n') i++;
-    return str + i;
+    // Skip past CRLF if found and both characters are available
+    if (str[i] == '\r' && str[i + 1] && str[i + 1] == '\n') {
+        return str + i + 2;  // Skip both \r and \n
+    }
+    
+    // If we reached end of string or buffer without finding complete CRLF, return NULL
+    return NULL;
 }
 
 /*
