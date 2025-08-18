@@ -26,7 +26,7 @@ TEST_GROUP(ReadLineTests)
 TEST(ReadLineTests, ReadSimpleLineWithNewlineShouldFail)
 {
     const char* input = "Hello World\nNext line";
-    const char* next = read_line(input, buffer, sizeof(buffer));
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
     
     // Should return NULL since only LF is not valid in HTTP
     POINTERS_EQUAL(NULL, next);
@@ -36,7 +36,7 @@ TEST(ReadLineTests, ReadSimpleLineWithNewlineShouldFail)
 TEST(ReadLineTests, ReadLineWithCRLF)
 {
     const char* input = "HTTP/1.1 200 OK\r\nContent-Type: text/html";
-    const char* next = read_line(input, buffer, sizeof(buffer));
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
     
     STRCMP_EQUAL("HTTP/1.1 200 OK", buffer);
     STRCMP_EQUAL("Content-Type: text/html", next);
@@ -46,7 +46,7 @@ TEST(ReadLineTests, ReadLineWithCRLF)
 TEST(ReadLineTests, ReadLineWithoutCRLF)
 {
     const char* input = "Last line without CRLF";
-    const char* next = read_line(input, buffer, sizeof(buffer));
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
     
     // Should return NULL since no CRLF found
     POINTERS_EQUAL(NULL, next);
@@ -56,7 +56,7 @@ TEST(ReadLineTests, ReadLineWithoutCRLF)
 TEST(ReadLineTests, ReadEmptyLineWithLFShouldFail)
 {
     const char* input = "\nNext line";
-    const char* next = read_line(input, buffer, sizeof(buffer));
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
     
     // Should return NULL since only LF is not valid
     POINTERS_EQUAL(NULL, next);
@@ -66,7 +66,7 @@ TEST(ReadLineTests, ReadEmptyLineWithLFShouldFail)
 TEST(ReadLineTests, ReadEmptyLineWithCRLF)
 {
     const char* input = "\r\nNext line";
-    const char* next = read_line(input, buffer, sizeof(buffer));
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
     
     STRCMP_EQUAL("", buffer);
     STRCMP_EQUAL("Next line", next);
@@ -75,7 +75,7 @@ TEST(ReadLineTests, ReadEmptyLineWithCRLF)
 // Test with NULL input
 TEST(ReadLineTests, HandleNullInput)
 {
-    const char* next = read_line(NULL, buffer, sizeof(buffer));
+    const char* next = read_crlf_line(NULL, buffer, sizeof(buffer));
     
     POINTERS_EQUAL(NULL, next);
 }
@@ -84,7 +84,7 @@ TEST(ReadLineTests, HandleNullInput)
 TEST(ReadLineTests, HandleEmptyStringInput)
 {
     const char* input = "";
-    const char* next = read_line(input, buffer, sizeof(buffer));
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
     
     POINTERS_EQUAL(NULL, next);
 }
@@ -94,7 +94,7 @@ TEST(ReadLineTests, HandleBufferSizeLimitWithCRLF)
 {
     const char* input = "This is a very long line\r\nNext line";
     char small_buffer[10];
-    const char* next = read_line(input, small_buffer, sizeof(small_buffer));
+    const char* next = read_crlf_line(input, small_buffer, sizeof(small_buffer));
     
     // Should only copy 9 characters (buffer size - 1) and null terminate
     STRCMP_EQUAL("This is a", small_buffer);
@@ -106,16 +106,16 @@ TEST(ReadLineTests, HandleBufferSizeLimitWithCRLF)
 TEST(ReadLineTests, HandleConsecutiveCRLF)
 {
     const char* input = "First line\r\n\r\n\r\nFourth line\r\n";
-    const char* next1 = read_line(input, buffer, sizeof(buffer));
+    const char* next1 = read_crlf_line(input, buffer, sizeof(buffer));
     STRCMP_EQUAL("First line", buffer);
     
-    const char* next2 = read_line(next1, buffer, sizeof(buffer));
+    const char* next2 = read_crlf_line(next1, buffer, sizeof(buffer));
     STRCMP_EQUAL("", buffer);
     
-    const char* next3 = read_line(next2, buffer, sizeof(buffer));
+    const char* next3 = read_crlf_line(next2, buffer, sizeof(buffer));
     STRCMP_EQUAL("", buffer);
     
-    read_line(next3, buffer, sizeof(buffer));
+    read_crlf_line(next3, buffer, sizeof(buffer));
     STRCMP_EQUAL("Fourth line", buffer);
 }
 
@@ -123,7 +123,7 @@ TEST(ReadLineTests, HandleConsecutiveCRLF)
 TEST(ReadLineTests, HandleCarriageReturnOnlyShouldFail)
 {
     const char* input = "Line with CR only\rMore text";
-    const char* next = read_line(input, buffer, sizeof(buffer));
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
     
     // Should return NULL since no CRLF found
     POINTERS_EQUAL(NULL, next);
@@ -135,23 +135,23 @@ TEST(ReadLineTests, ReadHTTPHeaders)
     const char* input = "GET /path HTTP/1.1\r\nHost: example.com\r\nUser-Agent: TestAgent\r\n\r\nBody content";
     
     // Read request line
-    const char* next1 = read_line(input, buffer, sizeof(buffer));
+    const char* next1 = read_crlf_line(input, buffer, sizeof(buffer));
     STRCMP_EQUAL("GET /path HTTP/1.1", buffer);
     
     // Read Host header
-    const char* next2 = read_line(next1, buffer, sizeof(buffer));
+    const char* next2 = read_crlf_line(next1, buffer, sizeof(buffer));
     STRCMP_EQUAL("Host: example.com", buffer);
     
     // Read User-Agent header
-    const char* next3 = read_line(next2, buffer, sizeof(buffer));
+    const char* next3 = read_crlf_line(next2, buffer, sizeof(buffer));
     STRCMP_EQUAL("User-Agent: TestAgent", buffer);
     
     // Read empty line (header separator)
-    const char* next4 = read_line(next3, buffer, sizeof(buffer));
+    const char* next4 = read_crlf_line(next3, buffer, sizeof(buffer));
     STRCMP_EQUAL("", buffer);
     
     // Body content has no CRLF, so should fail
-    const char* next5 = read_line(next4, buffer, sizeof(buffer));
+    const char* next5 = read_crlf_line(next4, buffer, sizeof(buffer));
     POINTERS_EQUAL(NULL, next5);
 }
 
@@ -159,7 +159,7 @@ TEST(ReadLineTests, ReadHTTPHeaders)
 TEST(ReadLineTests, SingleCharacterLineWithCRLF)
 {
     const char* input = "A\r\nB";
-    const char* next = read_line(input, buffer, sizeof(buffer));
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
     
     STRCMP_EQUAL("A", buffer);
     STRCMP_EQUAL("B", next);
@@ -169,7 +169,7 @@ TEST(ReadLineTests, SingleCharacterLineWithCRLF)
 TEST(ReadLineTests, SingleCharacterLineWithLFShouldFail)
 {
     const char* input = "A\nB";
-    const char* next = read_line(input, buffer, sizeof(buffer));
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
     
     // Should return NULL since only LF is not valid
     POINTERS_EQUAL(NULL, next);
@@ -180,7 +180,7 @@ TEST(ReadLineTests, MinimalBufferSize)
 {
     const char* input = "Hello\r\nWorld";
     char tiny_buffer[1];
-    const char* next = read_line(input, tiny_buffer, sizeof(tiny_buffer));
+    const char* next = read_crlf_line(input, tiny_buffer, sizeof(tiny_buffer));
     
     STRCMP_EQUAL("", tiny_buffer); // Should be empty string
     // Should return NULL since no room to find CRLF within buffer
@@ -192,7 +192,7 @@ TEST(ReadLineTests, PartialCRLFAtBufferBoundary)
 {
     const char* input = "123456789\r\nNext";
     char small_buffer[9]; // Can only fit "12345678" (8 chars + null), CRLF is beyond buffer limit
-    const char* next = read_line(input, small_buffer, sizeof(small_buffer));
+    const char* next = read_crlf_line(input, small_buffer, sizeof(small_buffer));
     
     // Should copy "12345678" and return NULL since CRLF is beyond what we can check
     STRCMP_EQUAL("12345678", small_buffer);
@@ -204,7 +204,7 @@ TEST(ReadLineTests, CRLFAtExactBufferBoundary)
 {
     const char* input = "12345\r\nNext";
     char buffer_exact[8]; // Exactly fits "12345\r\n" + null terminator
-    const char* next = read_line(input, buffer_exact, sizeof(buffer_exact));
+    const char* next = read_crlf_line(input, buffer_exact, sizeof(buffer_exact));
     
     // Should successfully read the line
     STRCMP_EQUAL("12345", buffer_exact);

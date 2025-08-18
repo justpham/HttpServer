@@ -6,14 +6,14 @@ extern "C" {
     #include "http_parser.h"
 }
 
-TEST_GROUP(HttpParserTests)
+TEST_GROUP(ParseHeaderTests)
 {
-    HTTP_REQUEST request;
+    HTTP_HEADER header;
     
     void setup()
     {
-        // Clear the request structure before each test
-        memset(&request, 0, sizeof(HTTP_REQUEST));
+        // Reset structures before each test
+        memset(&header, 0, sizeof(HTTP_HEADER));
     }
 
     void teardown()
@@ -22,378 +22,195 @@ TEST_GROUP(HttpParserTests)
     }
 };
 
-TEST(HttpParserTests, ParseSimpleGetRequest)
+TEST_GROUP(ParseStartLineTests)
 {
-    const char* raw_request = 
-        "GET /index.html HTTP/1.1\r\n"
-        "Host: example.com\r\n"
-        "User-Agent: TestAgent/1.0\r\n"
-        "\r\n";
+    HTTP_START_LINE start_line;
     
-    int result = parse_request(raw_request, &request);
+    void setup()
+    {
+        // Reset structures before each test
+        memset(&start_line, 0, sizeof(HTTP_START_LINE));
+    }
+
+    void teardown()
+    {
+        // Cleanup code for each test
+    }
+};
+
+// Tests for parse_header function
+TEST(ParseHeaderTests, ParseHeaderValidInput)
+{
+    char line[] = "Content-Type: application/json\r\n";
+    int result = parse_header(line, &header);
     
     CHECK_EQUAL(0, result);
-    STRCMP_EQUAL("GET", request.method);
-    STRCMP_EQUAL("/index.html", request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", request.http_version);
-    CHECK_EQUAL(2, request.header_count);
-    CHECK_EQUAL(0, request.body_length);
+    STRCMP_EQUAL("Content-Type", header.key);
+    STRCMP_EQUAL("application/json", header.value);
 }
 
-TEST(HttpParserTests, ParsePostRequestWithBody)
+TEST(ParseHeaderTests, ParseHeaderWithSpaces)
 {
-    const char* raw_request = 
-        "POST /api/data HTTP/1.1\r\n"
-        "Host: api.example.com\r\n"
-        "Content-Type: application/json\r\n"
-        "Content-Length: 24\r\n"
-        "\r\n"
-        "{\"name\":\"test\",\"id\":123}";
-    
-    int result = parse_request(raw_request, &request);
+    char line[] = "Authorization: Bearer token123\r\n";
+    int result = parse_header(line, &header);
     
     CHECK_EQUAL(0, result);
-    STRCMP_EQUAL("POST", request.method);
-    STRCMP_EQUAL("/api/data", request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", request.http_version);
-    CHECK_EQUAL(3, request.header_count);
-    CHECK_EQUAL(24, request.content_length);
-    CHECK_EQUAL(24, request.body_length);
-    STRCMP_EQUAL("{\"name\":\"test\",\"id\":123}", request.body);
+    STRCMP_EQUAL("Authorization", header.key);
+    STRCMP_EQUAL("Bearer token123", header.value);
 }
 
-TEST(HttpParserTests, ParseRequestWithMultipleHeaders)
+TEST(ParseHeaderTests, ParseHeaderWithMultipleSpaces)
 {
-    const char* raw_request = 
-        "GET /test HTTP/1.1\r\n"
-        "Host: localhost:8080\r\n"
-        "User-Agent: Mozilla/5.0\r\n"
-        "Accept: text/html,application/xhtml+xml\r\n"
-        "Accept-Language: en-US,en;q=0.9\r\n"
-        "Connection: keep-alive\r\n"
-        "\r\n";
-    
-    int result = parse_request(raw_request, &request);
+    char line[] = "User-Agent:   Mozilla/5.0 (Windows NT 10.0)\r\n";
+    int result = parse_header(line, &header);
     
     CHECK_EQUAL(0, result);
-    STRCMP_EQUAL("GET", request.method);
-    STRCMP_EQUAL("/test", request.request_target);
-    CHECK_EQUAL(5, request.header_count);
+    STRCMP_EQUAL("User-Agent", header.key);
+    STRCMP_EQUAL("Mozilla/5.0 (Windows NT 10.0)", header.value);
 }
 
-TEST(HttpParserTests, GetHeaderValue)
+TEST(ParseHeaderTests, ParseHeaderNullLine)
 {
-    const char* raw_request = 
-        "GET / HTTP/1.1\r\n"
-        "Host: example.com\r\n"
-        "Content-Type: text/html\r\n"
-        "Authorization: Bearer token123\r\n"
-        "\r\n";
-    
-    int result = parse_request(raw_request, &request);
-    CHECK_EQUAL(0, result);
-    
-    const char* host = get_header_value(&request, "Host");
-    const char* content_type = get_header_value(&request, "Content-Type");
-    const char* auth = get_header_value(&request, "Authorization");
-    const char* missing = get_header_value(&request, "X-Missing-Header");
-    
-    STRCMP_EQUAL("example.com", host);
-    STRCMP_EQUAL("text/html", content_type);
-    STRCMP_EQUAL("Bearer token123", auth);
-    CHECK(missing == NULL);
-}
-
-TEST(HttpParserTests, GetHeaderValueCaseInsensitive)
-{
-    const char* raw_request = 
-        "GET / HTTP/1.1\r\n"
-        "Host: example.com\r\n"
-        "content-type: application/json\r\n"
-        "\r\n";
-    
-    int result = parse_request(raw_request, &request);
-    CHECK_EQUAL(0, result);
-    
-    // Test case insensitive header lookup
-    const char* value1 = get_header_value(&request, "Content-Type");
-    const char* value2 = get_header_value(&request, "content-type");
-    const char* value3 = get_header_value(&request, "CONTENT-TYPE");
-    
-    STRCMP_EQUAL("application/json", value1);
-    STRCMP_EQUAL("application/json", value2);
-    STRCMP_EQUAL("application/json", value3);
-}
-
-TEST(HttpParserTests, ParseInvalidMethod)
-{
-    const char* raw_request = 
-        "INVALID_METHOD_THAT_IS_TOO_LONG /path HTTP/1.1\r\n"
-        "Host: example.com\r\n"
-        "\r\n";
-    
-    int result = parse_request(raw_request, &request);
-    
-    // Should return error code for invalid/too long method
+    int result = parse_header(NULL, &header);
     CHECK_EQUAL(-1, result);
 }
 
-TEST(HttpParserTests, ParseMalformedRequestLine)
+TEST(ParseHeaderTests, ParseHeaderEmptyLine)
 {
-    const char* raw_request = 
-        "GET\r\n"  // Missing target and version
-        "Host: example.com\r\n"
-        "\r\n";
-    
-    int result = parse_request(raw_request, &request);
-    
-    // Should return error code for malformed request line
-    CHECK_EQUAL(-6, result);
+    char line[] = "";
+    int result = parse_header(line, &header);
+    CHECK_EQUAL(-1, result);
 }
 
-TEST(HttpParserTests, ParseRequestWithoutHeaders)
+TEST(ParseHeaderTests, ParseHeaderNullHeader)
 {
-    const char* raw_request = 
-        "GET / HTTP/1.1\r\n"
-        "\r\n";  // No headers, just empty line
-    
-    int result = parse_request(raw_request, &request);
-    
-    // Should return error (-6) because Host header is missing
-    CHECK_EQUAL(-6, result);
+    char line[] = "Content-Length: 123\r\n";
+    int result = parse_header(line, NULL);
+    CHECK_EQUAL(-2, result);
 }
 
-TEST(HttpParserTests, ParseRequestWithContentLengthMismatch)
+TEST(ParseHeaderTests, ParseHeaderMalformedNoColon)
 {
-    const char* raw_request = 
-        "POST /data HTTP/1.1\r\n"
-        "Host: example.com\r\n"
-        "Content-Length: 10\r\n"  // Claims 10 bytes
-        "\r\n"
-        "short";  // But only 5 bytes actual body
+    char line[] = "InvalidHeaderLine\r\n";
+    int result = parse_header(line, &header);
+    CHECK_EQUAL(-4, result);
+}
+
+TEST(ParseHeaderTests, ParseHeaderMalformedOnlyKey)
+{
+    char line[] = "Content-Type:\r\n";
+    int result = parse_header(line, &header);
+    CHECK_EQUAL(-4, result);
+}
+
+TEST(ParseHeaderTests, ParseHeaderLongKey)
+{
+    // Create a header with a very long key to test buffer limits
+    char long_key[300];
+    memset(long_key, 'A', 299);
+    long_key[299] = '\0';
     
-    int result = parse_request(raw_request, &request);
+    char line[400];
+    snprintf(line, sizeof(line), "%s: value\r\n", long_key);
     
-    // Should handle content length mismatch appropriately
-    // (behavior depends on implementation - might be error or partial parse)
+    int result = parse_header(line, &header);
     CHECK_EQUAL(0, result);
-    CHECK_EQUAL(5, request.body_length);  // Actual body length
-    CHECK_EQUAL(10, request.content_length);  // Parsed Content-Length header
+    // Key should be truncated to MAX_HEADER_LENGTH - 1
+    CHECK_EQUAL(MAX_HEADER_LENGTH - 1, strlen(header.key));
 }
 
-TEST(HttpParserTests, ParseEmptyRequest)
+TEST(ParseHeaderTests, ParseHeaderLongValue)
 {
-    const char* raw_request = "";
+    // Create a header with a very long value to test buffer limits
+    char long_value[300];
+    memset(long_value, 'B', 299);
+    long_value[299] = '\0';
     
-    int result = parse_request(raw_request, &request);
+    char line[400];
+    snprintf(line, sizeof(line), "Custom-Header: %s\r\n", long_value);
     
-    // Should return error for empty request
-    CHECK(result != 0);
-}
-
-TEST(HttpParserTests, ParseNullRequest)
-{
-    int result = parse_request(NULL, &request);
-    
-    // Should return error for null input
-    CHECK(result != 0);
-}
-
-TEST(HttpParserTests, ParseInvalidHttpVersion)
-{
-    const char* raw_request = 
-        "GET / HTTP/2.0\r\n"
-        "Host: example.com\r\n"
-        "\r\n";
-    
-    int result = parse_request(raw_request, &request);
-    
-    // Should return error for unsupported HTTP version
-    CHECK_EQUAL(-5, result);
-}
-
-TEST(HttpParserTests, ParseInvalidRequestTarget)
-{
-    const char* raw_request = 
-        "GET invalid-target HTTP/1.1\r\n"
-        "Host: example.com\r\n"
-        "\r\n";
-    
-    int result = parse_request(raw_request, &request);
-    
-    // Should return error for invalid request target format
-    CHECK_EQUAL(-3, result);
-}
-
-TEST(HttpParserTests, ParseValidAbsoluteForm)
-{
-    const char* raw_request = 
-        "GET https://example.com/path HTTP/1.1\r\n"
-        "Host: example.com\r\n"
-        "\r\n";
-    
-    int result = parse_request(raw_request, &request);
-    
-    // Should successfully parse absolute form URL
+    int result = parse_header(line, &header);
     CHECK_EQUAL(0, result);
-    STRCMP_EQUAL("GET", request.method);
-    STRCMP_EQUAL("https://example.com/path", request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", request.http_version);
+    STRCMP_EQUAL("Custom-Header", header.key);
+    // Value should be truncated to MAX_HEADER_LENGTH - 1
+    CHECK_EQUAL(MAX_HEADER_LENGTH - 1, strlen(header.value));
 }
 
-// Host Header Validation Tests
-TEST(HttpParserTests, ParseRequestMissingHostHeader)
+// Tests for parse_start_line function
+TEST(ParseStartLineTests, ParseStartLineValidGetRequest)
 {
-    const char* raw_request = 
-        "GET /path HTTP/1.1\r\n"
-        "User-Agent: TestAgent\r\n"
-        "Content-Type: text/html\r\n"
-        "\r\n";
+    char line[] = "GET /index.html HTTP/1.1\r\n";
+    int result = parse_start_line(line, &start_line);
     
-    int result = parse_request(raw_request, &request);
-    
-    // Should return error (-6) because Host header is missing
-    CHECK_EQUAL(-6, result);
-}
-
-TEST(HttpParserTests, ParseRequestWithValidHostHeader)
-{
-    const char* raw_request = 
-        "GET /path HTTP/1.1\r\n"
-        "Host: example.com\r\n"
-        "User-Agent: TestAgent\r\n"
-        "\r\n";
-    
-    int result = parse_request(raw_request, &request);
-    
-    // Should succeed with valid Host header
     CHECK_EQUAL(0, result);
-    STRCMP_EQUAL("GET", request.method);
-    STRCMP_EQUAL("/path", request.request_target);
-    
-    const char* host = get_header_value(&request, "Host");
-    STRCMP_EQUAL("example.com", host);
+    STRCMP_EQUAL("GET", start_line.request.method);
+    STRCMP_EQUAL("/index.html", start_line.request.request_target);
+    STRCMP_EQUAL("HTTP/1.1", start_line.request.http_version);
 }
 
-TEST(HttpParserTests, ParseRequestWithHostHeaderAndPort)
+TEST(ParseStartLineTests, ParseStartLineValidPostRequest)
 {
-    const char* raw_request = 
-        "GET /api HTTP/1.1\r\n"
-        "Host: localhost:8080\r\n"
-        "Accept: application/json\r\n"
-        "\r\n";
+    char line[] = "POST /api/users HTTP/1.1\r\n";
+    int result = parse_start_line(line, &start_line);
     
-    int result = parse_request(raw_request, &request);
-    
-    // Should succeed with Host header containing port
     CHECK_EQUAL(0, result);
-    
-    const char* host = get_header_value(&request, "Host");
-    STRCMP_EQUAL("localhost:8080", host);
+    STRCMP_EQUAL("POST", start_line.request.method);
+    STRCMP_EQUAL("/api/users", start_line.request.request_target);
+    STRCMP_EQUAL("HTTP/1.1", start_line.request.http_version);
 }
 
-TEST(HttpParserTests, ParseRequestWithEmptyHostHeader)
+TEST(ParseStartLineTests, ParseStartLineWithQueryString)
 {
-    const char* raw_request = 
-        "GET /path HTTP/1.1\r\n"
-        "Host: \r\n"
-        "User-Agent: TestAgent\r\n"
-        "\r\n";
+    char line[] = "GET /search?q=test&page=1 HTTP/1.1\r\n";
+    int result = parse_start_line(line, &start_line);
     
-    int result = parse_request(raw_request, &request);
-    
-    // Should return error (-6) because empty Host header fails to parse
-    // and then Host header is considered missing
-    CHECK_EQUAL(-6, result);
-}
-
-TEST(HttpParserTests, ParseRequestWithMinimalHostHeader)
-{
-    const char* raw_request = 
-        "GET /path HTTP/1.1\r\n"
-        "Host: x\r\n"
-        "User-Agent: TestAgent\r\n"
-        "\r\n";
-    
-    int result = parse_request(raw_request, &request);
-    
-    // Should succeed with minimal Host header value
     CHECK_EQUAL(0, result);
-    
-    const char* host = get_header_value(&request, "Host");
-    STRCMP_EQUAL("x", host);
+    STRCMP_EQUAL("GET", start_line.request.method);
+    STRCMP_EQUAL("/search?q=test&page=1", start_line.request.request_target);
+    STRCMP_EQUAL("HTTP/1.1", start_line.request.http_version);
 }
 
-TEST(HttpParserTests, ParseRequestHostHeaderCaseInsensitive)
+TEST(ParseStartLineTests, ParseStartLineNullLine)
 {
-    const char* raw_request = 
-        "GET /path HTTP/1.1\r\n"
-        "host: example.com\r\n"
-        "User-Agent: TestAgent\r\n"
-        "\r\n";
-    
-    int result = parse_request(raw_request, &request);
-    
-    // Should succeed - Host header lookup is case insensitive
-    CHECK_EQUAL(0, result);
-    
-    const char* host1 = get_header_value(&request, "Host");
-    const char* host2 = get_header_value(&request, "host");
-    const char* host3 = get_header_value(&request, "HOST");
-    
-    STRCMP_EQUAL("example.com", host1);
-    STRCMP_EQUAL("example.com", host2);
-    STRCMP_EQUAL("example.com", host3);
+    int result = parse_start_line(NULL, &start_line);
+    CHECK_EQUAL(-1, result);
 }
 
-TEST(HttpParserTests, ParseRequestMultipleHostHeaders)
+TEST(ParseStartLineTests, ParseStartLineEmptyLine)
 {
-    const char* raw_request = 
-        "GET /path HTTP/1.1\r\n"
-        "Host: first.com\r\n"
-        "Host: second.com\r\n"
-        "User-Agent: TestAgent\r\n"
-        "\r\n";
-    
-    int result = parse_request(raw_request, &request);
-    
-    // Should succeed - first Host header will be found
-    CHECK_EQUAL(0, result);
-    
-    const char* host = get_header_value(&request, "Host");
-    STRCMP_EQUAL("first.com", host);
+    char line[] = "";
+    int result = parse_start_line(line, &start_line);
+    CHECK_EQUAL(-1, result);
 }
 
-TEST(HttpParserTests, ParseRequestHostWithIPv4)
+TEST(ParseStartLineTests, ParseStartLineNullStartLine)
 {
-    const char* raw_request = 
-        "GET /path HTTP/1.1\r\n"
-        "Host: 192.168.1.1:8080\r\n"
-        "User-Agent: TestAgent\r\n"
-        "\r\n";
-    
-    int result = parse_request(raw_request, &request);
-    
-    // Should succeed with IPv4 address in Host header
-    CHECK_EQUAL(0, result);
-    
-    const char* host = get_header_value(&request, "Host");
-    STRCMP_EQUAL("192.168.1.1:8080", host);
+    char line[] = "GET / HTTP/1.1\r\n";
+    int result = parse_start_line(line, NULL);
+    CHECK_EQUAL(-2, result);
 }
 
-TEST(HttpParserTests, ParseRequestHostWithIPv6)
+TEST(ParseStartLineTests, ParseStartLineMalformedTwoComponents)
 {
-    const char* raw_request = 
-        "GET /path HTTP/1.1\r\n"
-        "Host: [::1]:8080\r\n"
-        "User-Agent: TestAgent\r\n"
-        "\r\n";
+    char line[] = "GET /index.html\r\n";
+    int result = parse_start_line(line, &start_line);
+    CHECK_EQUAL(-4, result);
+}
+
+TEST(ParseStartLineTests, ParseStartLineMalformedOneComponent)
+{
+    char line[] = "GET\r\n";
+    int result = parse_start_line(line, &start_line);
+    CHECK_EQUAL(-4, result);
+}
+
+TEST(ParseStartLineTests, ParseStartLineWithExtraSpaces)
+{
+    char line[] = "GET    /index.html    HTTP/1.1\r\n";
+    int result = parse_start_line(line, &start_line);
     
-    int result = parse_request(raw_request, &request);
-    
-    // Should succeed with IPv6 address in Host header
     CHECK_EQUAL(0, result);
-    
-    const char* host = get_header_value(&request, "Host");
-    STRCMP_EQUAL("[::1]:8080", host);
+    STRCMP_EQUAL("GET", start_line.request.method);
+    STRCMP_EQUAL("/index.html", start_line.request.request_target);
+    STRCMP_EQUAL("HTTP/1.1", start_line.request.http_version);
 }
