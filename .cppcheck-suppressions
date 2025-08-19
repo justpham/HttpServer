@@ -8,7 +8,6 @@ missingIncludeSystem
 
 # Suppress unused function warnings for library functions that may be used later
 unusedFunction:src/include/http_parser.c
-unusedFunction:src/client/include/connect.c
 
 # Suppress style warnings that are acceptable in this codebase
 constParameterPointer

@@ -1,6 +1,8 @@
 #include "CppUTest/TestHarness.h"
 #include "CppUTest/CommandLineTestRunner.h"
 #include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 extern "C" {
     #include "http_parser.h"
@@ -551,4 +553,278 @@ TEST(ReadLineTests, CRLFAtExactBufferBoundary)
     // Should successfully read the line
     STRCMP_EQUAL("12345", buffer_exact);
     STRCMP_EQUAL("Next", next);
+}
+
+TEST_GROUP(ParseBodyTests)
+{
+    FILE* temp_file;
+    char temp_filename[256];
+    
+    void setup()
+    {
+        // Create a temporary file for testing
+        strcpy(temp_filename, "/tmp/test_body_XXXXXX");
+        int fd = mkstemp(temp_filename);
+        CHECK(fd != -1);
+        temp_file = fdopen(fd, "w+");
+        CHECK(temp_file != NULL);
+    }
+
+    void teardown()
+    {
+        if (temp_file) {
+            fclose(temp_file);
+        }
+        unlink(temp_filename);
+    }
+    
+    void verify_file_content(const char* expected_content, int expected_length)
+    {
+        // Rewind and read file content
+        rewind(temp_file);
+        char* buffer = (char*)malloc(expected_length + 1);
+        size_t bytes_read = fread(buffer, 1, expected_length, temp_file);
+        buffer[bytes_read] = '\0';
+        
+        LONGS_EQUAL(expected_length, bytes_read);
+        STRNCMP_EQUAL(expected_content, buffer, expected_length);
+        
+        free(buffer);
+    }
+};
+
+TEST(ParseBodyTests, ValidSmallBody)
+{
+    const char* body_content = "Hello, World!";
+    int content_length = strlen(body_content);
+    
+    int result = parse_body(body_content, content_length, temp_file);
+    
+    LONGS_EQUAL(0, result);
+    verify_file_content(body_content, content_length);
+}
+
+TEST(ParseBodyTests, EmptyBody)
+{
+    const char* body_content = "";
+    int content_length = 0;
+    
+    int result = parse_body(body_content, content_length, temp_file);
+    
+    LONGS_EQUAL(0, result);
+    verify_file_content("", 0);
+}
+
+TEST(ParseBodyTests, LargeBody)
+{
+    // Create a body larger than the chunk size (8192)
+    int content_length = 10000;
+    char* large_body = (char*)malloc(content_length + 1);
+    
+    // Fill with a pattern
+    for (int i = 0; i < content_length; i++) {
+        large_body[i] = 'A' + (i % 26);
+    }
+    large_body[content_length] = '\0';
+    
+    int result = parse_body(large_body, content_length, temp_file);
+    
+    LONGS_EQUAL(0, result);
+    verify_file_content(large_body, content_length);
+    
+    free(large_body);
+}
+
+TEST(ParseBodyTests, NullBodyBuffer)
+{
+    int result = parse_body(NULL, 10, temp_file);
+    LONGS_EQUAL(-1, result);
+}
+
+TEST(ParseBodyTests, NullFilePointer)
+{
+    const char* body_content = "test";
+    int result = parse_body(body_content, 4, NULL);
+    LONGS_EQUAL(-1, result);
+}
+
+TEST(ParseBodyTests, NegativeContentLength)
+{
+    const char* body_content = "test";
+    int result = parse_body(body_content, -1, temp_file);
+    LONGS_EQUAL(-1, result);
+}
+
+TEST(ParseBodyTests, BinaryData)
+{
+    // Test with binary data including null bytes
+    unsigned char binary_data[] = {0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0xFD, 0x00, 0x05};
+    int content_length = sizeof(binary_data);
+    
+    int result = parse_body((const char*)binary_data, content_length, temp_file);
+    
+    LONGS_EQUAL(0, result);
+    
+    // Verify binary content
+    rewind(temp_file);
+    char read_buffer[sizeof(binary_data)];
+    size_t bytes_read = fread(read_buffer, 1, sizeof(binary_data), temp_file);
+    
+    LONGS_EQUAL(content_length, bytes_read);
+    MEMCMP_EQUAL(binary_data, read_buffer, content_length);
+}
+
+TEST_GROUP(ParseBodyStreamTests)
+{
+    FILE* input_file;
+    FILE* output_file;
+    char input_filename[256];
+    char output_filename[256];
+    
+    void setup()
+    {
+        // Create temporary input file
+        strcpy(input_filename, "/tmp/test_input_XXXXXX");
+        int in_fd = mkstemp(input_filename);
+        CHECK(in_fd != -1);
+        input_file = fdopen(in_fd, "w+");
+        CHECK(input_file != NULL);
+        
+        // Create temporary output file
+        strcpy(output_filename, "/tmp/test_output_XXXXXX");
+        int out_fd = mkstemp(output_filename);
+        CHECK(out_fd != -1);
+        output_file = fdopen(out_fd, "w+");
+        CHECK(output_file != NULL);
+    }
+
+    void teardown()
+    {
+        if (input_file) {
+            fclose(input_file);
+        }
+        if (output_file) {
+            fclose(output_file);
+        }
+        unlink(input_filename);
+        unlink(output_filename);
+    }
+    
+    void write_to_input_file(const char* content, int length)
+    {
+        rewind(input_file);
+        fwrite(content, 1, length, input_file);
+        fflush(input_file);
+        rewind(input_file);
+    }
+    
+    void verify_output_content(const char* expected_content, int expected_length)
+    {
+        rewind(output_file);
+        char* buffer = (char*)malloc(expected_length + 1);
+        size_t bytes_read = fread(buffer, 1, expected_length, output_file);
+        buffer[bytes_read] = '\0';
+        
+        LONGS_EQUAL(expected_length, bytes_read);
+        STRNCMP_EQUAL(expected_content, buffer, expected_length);
+        
+        free(buffer);
+    }
+};
+
+TEST(ParseBodyStreamTests, ValidSmallBodyStream)
+{
+    const char* body_content = "Hello from stream!";
+    int content_length = strlen(body_content);
+    
+    write_to_input_file(body_content, content_length);
+    
+    int result = parse_body_stream(input_file, content_length, output_file);
+    
+    LONGS_EQUAL(0, result);
+    verify_output_content(body_content, content_length);
+}
+
+TEST(ParseBodyStreamTests, EmptyBodyStream)
+{
+    int content_length = 0;
+    
+    int result = parse_body_stream(input_file, content_length, output_file);
+    
+    LONGS_EQUAL(0, result);
+    verify_output_content("", 0);
+}
+
+TEST(ParseBodyStreamTests, LargeBodyStream)
+{
+    // Create a body larger than the internal buffer (8192)
+    int content_length = 15000;
+    char* large_body = (char*)malloc(content_length + 1);
+    
+    // Fill with a pattern
+    for (int i = 0; i < content_length; i++) {
+        large_body[i] = 'X' + (i % 3); // X, Y, Z pattern
+    }
+    large_body[content_length] = '\0';
+    
+    write_to_input_file(large_body, content_length);
+    
+    int result = parse_body_stream(input_file, content_length, output_file);
+    
+    LONGS_EQUAL(0, result);
+    verify_output_content(large_body, content_length);
+    
+    free(large_body);
+}
+
+TEST(ParseBodyStreamTests, NullInputFile)
+{
+    int result = parse_body_stream(NULL, 10, output_file);
+    LONGS_EQUAL(-1, result);
+}
+
+TEST(ParseBodyStreamTests, NullOutputFile)
+{
+    int result = parse_body_stream(input_file, 10, NULL);
+    LONGS_EQUAL(-1, result);
+}
+
+TEST(ParseBodyStreamTests, NegativeContentLength)
+{
+    int result = parse_body_stream(input_file, -1, output_file);
+    LONGS_EQUAL(-1, result);
+}
+
+TEST(ParseBodyStreamTests, UnexpectedEOF)
+{
+    const char* partial_content = "Only half";
+    int partial_length = strlen(partial_content);
+    int expected_length = 20; // Expect more than what's available
+    
+    write_to_input_file(partial_content, partial_length);
+    
+    int result = parse_body_stream(input_file, expected_length, output_file);
+    
+    LONGS_EQUAL(-2, result); // Should return -2 for unexpected EOF
+}
+
+TEST(ParseBodyStreamTests, BinaryDataStream)
+{
+    // Test with binary data including null bytes
+    unsigned char binary_data[] = {0x10, 0x20, 0x00, 0x30, 0xFF, 0x00, 0x40, 0x50};
+    int content_length = sizeof(binary_data);
+    
+    write_to_input_file((const char*)binary_data, content_length);
+    
+    int result = parse_body_stream(input_file, content_length, output_file);
+    
+    LONGS_EQUAL(0, result);
+    
+    // Verify binary content
+    rewind(output_file);
+    char read_buffer[sizeof(binary_data)];
+    size_t bytes_read = fread(read_buffer, 1, sizeof(binary_data), output_file);
+    
+    LONGS_EQUAL(content_length, bytes_read);
+    MEMCMP_EQUAL(binary_data, read_buffer, content_length);
 }

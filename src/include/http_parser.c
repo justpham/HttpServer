@@ -142,3 +142,90 @@ get_header_value(const HTTP_HEADER **header_array, const int length, const char 
     }
     return NULL;
 }
+
+/*
+    Parses the HTTP body to output to a file descriptor
+*/
+int
+parse_body(const char *body_buffer, int content_length, FILE *out_fd)
+{
+    if (!body_buffer || content_length < 0 || !out_fd) {
+        fprintf(stderr, "Invalid arguments to parse_body()\n");
+        return -1;
+    }
+
+    if (content_length == 0)
+        return 0;
+
+    const char *p = body_buffer;
+    int remaining = content_length;
+    const size_t CHUNK = 8192;
+
+    while (remaining > 0) {
+        size_t to_write = remaining > (int) CHUNK ? CHUNK : (size_t) remaining;
+        size_t written = fwrite(p, 1, to_write, out_fd);
+        if (written == 0) {
+            if (ferror(out_fd)) {
+                perror("write to fd failed");
+                return -2;
+            }
+            /* Nothing written but no error: avoid infinite loop */
+            break;
+        }
+        p += written;
+        remaining -= (int) written;
+    }
+
+    if (fflush(out_fd) != 0) {
+        perror("fflush");
+        return -3;
+    }
+
+    return remaining == 0 ? 0 : -4;
+}
+
+// Stream body from an input FILE* (e.g. socket via fdopen) to output FILE*
+int
+parse_body_stream(FILE *in_fd, int content_length, FILE *out_fd)
+{
+    if (!in_fd || !out_fd || content_length < 0) {
+        fprintf(stderr, "Invalid arguments to parse_body_stream()\n");
+        return -1;
+    }
+
+    if (content_length == 0)
+        return 0;
+
+    char buffer[8192];
+    int remaining = content_length;
+
+    while (remaining > 0) {
+        size_t to_read = remaining > (int) sizeof(buffer) ? sizeof(buffer) : (size_t) remaining;
+        size_t r = fread(buffer, 1, to_read, in_fd);
+        if (r == 0) {
+            if (feof(in_fd)) {
+                fprintf(stderr, "Unexpected EOF while reading body\n");
+                return -2;
+            }
+            if (ferror(in_fd)) {
+                perror("read failed");
+                return -3;
+            }
+        }
+
+        size_t written = fwrite(buffer, 1, r, out_fd);
+        if (written != r) {
+            perror("write failed");
+            return -4;
+        }
+
+        remaining -= (int) r;
+    }
+
+    if (fflush(out_fd) != 0) {
+        perror("fflush");
+        return -5;
+    }
+
+    return 0;
+}
