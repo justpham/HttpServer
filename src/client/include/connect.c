@@ -2,7 +2,6 @@
     Implementation for socket and connect abstractions for a client
 */
 
-
 #define _GNU_SOURCE
 
 #include "connect.h"
@@ -15,7 +14,9 @@
 
     Returns a socket file descriptor on success, returns a negative error code on failure
 */
-int connect_to_host(const char *hostname) {
+int
+connect_to_host(const char *hostname)
+{
 
     int rv;
     struct addrinfo hints;
@@ -31,12 +32,11 @@ int connect_to_host(const char *hostname) {
     if ((rv = getaddrinfo(hostname, PORT, &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         return -1;
-    }    
+    }
 
     // loop through all the results and connect to the first we can
-    for(p = servinfo; p != NULL; p = p->ai_next) {
-        if ((sockfd = socket(p->ai_family, p->ai_socktype,
-                p->ai_protocol)) == -1) {
+    for (p = servinfo; p != NULL; p = p->ai_next) {
+        if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
             perror("client: socket");
             continue;
         }
@@ -53,7 +53,7 @@ int connect_to_host(const char *hostname) {
     }
 
     if (p == NULL) {
-        print_ip("client: failed to connect to", p->ai_family, p->ai_addr, false);
+        fprintf(stderr, "client: failed to connect\n");
         return -2;
     }
 
@@ -67,13 +67,15 @@ int connect_to_host(const char *hostname) {
 /*
     Recieves data from a given socket
 */
-int recieve_data(int sockfd, char* buf, int maxLength) {
+int
+receive_data(int sockfd, char *buf, int maxLength)
+{
 
     int recieve_rate = RECV_RATE > (maxLength - 1) ? RECV_RATE : maxLength - 1;
     int numbytes = 0;
 
     if ((numbytes = recv(sockfd, buf, recieve_rate, 0)) == -1) {
-        perror("recv() in recieve_data() failed\n");
+        perror("recv() in receive_data() failed\n");
         return -1;
     }
 
