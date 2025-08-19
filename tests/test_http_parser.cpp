@@ -140,7 +140,7 @@ TEST(ParseHeaderTests, ParseHeaderLongValue)
 TEST(ParseStartLineTests, ParseStartLineValidGetRequest)
 {
     char line[] = "GET /index.html HTTP/1.1\r\n";
-    int result = parse_start_line(line, &start_line);
+    int result = parse_start_line(line, &start_line, REQUEST);
     
     CHECK_EQUAL(0, result);
     STRCMP_EQUAL("GET", start_line.request.method);
@@ -151,7 +151,7 @@ TEST(ParseStartLineTests, ParseStartLineValidGetRequest)
 TEST(ParseStartLineTests, ParseStartLineValidPostRequest)
 {
     char line[] = "POST /api/users HTTP/1.1\r\n";
-    int result = parse_start_line(line, &start_line);
+    int result = parse_start_line(line, &start_line, REQUEST);
     
     CHECK_EQUAL(0, result);
     STRCMP_EQUAL("POST", start_line.request.method);
@@ -162,7 +162,7 @@ TEST(ParseStartLineTests, ParseStartLineValidPostRequest)
 TEST(ParseStartLineTests, ParseStartLineWithQueryString)
 {
     char line[] = "GET /search?q=test&page=1 HTTP/1.1\r\n";
-    int result = parse_start_line(line, &start_line);
+    int result = parse_start_line(line, &start_line, REQUEST);
     
     CHECK_EQUAL(0, result);
     STRCMP_EQUAL("GET", start_line.request.method);
@@ -172,45 +172,81 @@ TEST(ParseStartLineTests, ParseStartLineWithQueryString)
 
 TEST(ParseStartLineTests, ParseStartLineNullLine)
 {
-    int result = parse_start_line(NULL, &start_line);
+    int result = parse_start_line(NULL, &start_line, REQUEST);
     CHECK_EQUAL(-1, result);
 }
 
 TEST(ParseStartLineTests, ParseStartLineEmptyLine)
 {
     char line[] = "";
-    int result = parse_start_line(line, &start_line);
+    int result = parse_start_line(line, &start_line, REQUEST);
     CHECK_EQUAL(-1, result);
 }
 
 TEST(ParseStartLineTests, ParseStartLineNullStartLine)
 {
     char line[] = "GET / HTTP/1.1\r\n";
-    int result = parse_start_line(line, NULL);
+    int result = parse_start_line(line, NULL, REQUEST);
     CHECK_EQUAL(-2, result);
 }
 
 TEST(ParseStartLineTests, ParseStartLineMalformedTwoComponents)
 {
     char line[] = "GET /index.html\r\n";
-    int result = parse_start_line(line, &start_line);
-    CHECK_EQUAL(-4, result);
+    int result = parse_start_line(line, &start_line, REQUEST);
+    CHECK_EQUAL(-5, result);
 }
 
 TEST(ParseStartLineTests, ParseStartLineMalformedOneComponent)
 {
     char line[] = "GET\r\n";
-    int result = parse_start_line(line, &start_line);
-    CHECK_EQUAL(-4, result);
+    int result = parse_start_line(line, &start_line, REQUEST);
+    CHECK_EQUAL(-5, result);
 }
 
 TEST(ParseStartLineTests, ParseStartLineWithExtraSpaces)
 {
     char line[] = "GET    /index.html    HTTP/1.1\r\n";
-    int result = parse_start_line(line, &start_line);
+    int result = parse_start_line(line, &start_line, REQUEST);
     
     CHECK_EQUAL(0, result);
     STRCMP_EQUAL("GET", start_line.request.method);
     STRCMP_EQUAL("/index.html", start_line.request.request_target);
     STRCMP_EQUAL("HTTP/1.1", start_line.request.http_version);
+}
+
+// Response start line tests
+TEST(ParseStartLineTests, ParseStartLineValidResponse)
+{
+    char line[] = "HTTP/1.1 200 OK\r\n";
+    int result = parse_start_line(line, &start_line, RESPONSE);
+
+    CHECK_EQUAL(0, result);
+    STRCMP_EQUAL("HTTP/1.1", start_line.response.protocol);
+    STRCMP_EQUAL("200", start_line.response.status_code);
+    STRCMP_EQUAL("OK", start_line.response.status_message);
+}
+
+TEST(ParseStartLineTests, ParseStartLineValidResponseWithMultiWordStatus)
+{
+    char line[] = "HTTP/1.1 404 Not Found\r\n";
+    int result = parse_start_line(line, &start_line, RESPONSE);
+
+    CHECK_EQUAL(0, result);
+    STRCMP_EQUAL("HTTP/1.1", start_line.response.protocol);
+    STRCMP_EQUAL("404", start_line.response.status_code);
+    STRCMP_EQUAL("Not Found", start_line.response.status_message);
+}
+
+TEST(ParseStartLineTests, ParseStartLineResponseNullLine)
+{
+    int result = parse_start_line(NULL, &start_line, RESPONSE);
+    CHECK_EQUAL(-1, result);
+}
+
+TEST(ParseStartLineTests, ParseStartLineResponseMalformedTwoComponents)
+{
+    char line[] = "HTTP/1.1 200\r\n";
+    int result = parse_start_line(line, &start_line, RESPONSE);
+    CHECK_EQUAL(-5, result);
 }

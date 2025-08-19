@@ -33,8 +33,10 @@ const char* read_crlf_line(const char* str, char* buffer, size_t bufsize) {
 */
 int parse_start_line (
     char* line,
-    HTTP_START_LINE* start_line
+    HTTP_START_LINE* start_line,
+    int http_message_type
 ) {
+    int num_parsed = -1;
     char buffer[sizeof(HTTP_START_LINE)];      // Initialize a buffer to parse any line in the header
 
     if (!line || !*line) {
@@ -56,14 +58,31 @@ int parse_start_line (
         return -3;
     }
 
-    int num_parsed = sscanf(buffer, "%s %s %s", start_line->request.method, start_line->request.request_target, start_line->request.http_version);
+    if (http_message_type == REQUEST) 
+        num_parsed = sscanf(buffer, "%s %s %s", 
+            start_line->request.method, 
+            start_line->request.request_target, 
+            start_line->request.http_version
+        );
+        
+    else if (http_message_type == RESPONSE) 
+        num_parsed = sscanf(buffer, "%s %s %31[^\r\n]", 
+            start_line->response.protocol, 
+            start_line->response.status_code, 
+            start_line->response.status_message
+        );
+
+    else {
+        fprintf(stderr, "Unknown HTTP message type in parse_start_line()\n");
+        return -4;
+    }
 
     if (num_parsed == 3) {
         return 0;
     }
 
     fprintf(stderr, "Failed to parse start line: '%s'\n", buffer);
-    return -4;
+    return -5;
 }
 
 /*

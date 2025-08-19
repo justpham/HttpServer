@@ -18,6 +18,11 @@
 #define MAX_HEADERS         50          // Maximum number of header pairs
 #define MAX_HEADER_LENGTH   256         // Maximum length per header line
 
+enum HTTP_MESSAGE_TYPE {
+    REQUEST,
+    RESPONSE
+};
+
 /*
     HTTP Request Start Line Struct
 
@@ -80,7 +85,8 @@ const char* get_header_value(
 // Parsing functions
 int parse_start_line (
     char* line,
-    HTTP_START_LINE* start_line
+    HTTP_START_LINE* start_line,
+    int http_message_type
 );
 
 int parse_header (
