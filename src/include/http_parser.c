@@ -111,7 +111,7 @@ parse_header(char *line, HTTP_HEADER *header)
     char temp_key[MAX_HEADER_LENGTH] = { 0 };
     char temp_value[MAX_HEADER_LENGTH] = { 0 };
 
-    int num_parsed = sscanf(buffer, "%255[^:]: %255[^\r\n]", temp_key, temp_value);
+    int num_parsed = sscanf(buffer, "%8000[^:]: %8000[^\r\n]", temp_key, temp_value);
 
     if (num_parsed == 2) {
         strncpy(header->key, temp_key, MAX_HEADER_LENGTH - 1);
@@ -124,23 +124,6 @@ parse_header(char *line, HTTP_HEADER *header)
     }
 
     return 0;
-}
-
-/*
-    Gets the value of a header by key (case-insensitive)
-*/
-const char *
-get_header_value(const HTTP_HEADER **header_array, const int length, const char *key)
-{
-    if (!header_array || !key)
-        return NULL;
-
-    for (int i = 0; i < length; i++) {
-        if (strcasecmp(header_array[i]->key, key) == 0) {
-            return header_array[i]->value;
-        }
-    }
-    return NULL;
 }
 
 /*
