@@ -1,0 +1,17 @@
+# Cppcheck suppressions for HttpServer project
+# Suppress warnings for third-party code (cJSON)
+*:src/include/cJSON.c
+*:src/include/cJSON.h
+
+# Suppress informational messages about missing system headers
+missingIncludeSystem
+
+# Suppress unused function warnings for library functions that may be used later
+unusedFunction:src/include/http_parser.c
+unusedFunction:src/client/include/connect.c
+
+# Suppress style warnings that are acceptable in this codebase
+constParameterPointer
+variableScope
+arrayIndexThenCheck
+redundantCondition

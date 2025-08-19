@@ -71,4 +71,43 @@ clean:
 clean_tests:
 	rm -rf $(TEST_BUILD_DIRECTORY)
 
-.PHONY: all client server test clean clean_tests
+# Linting targets
+lint: format-check cppcheck
+
+format:
+	@echo "Formatting C source files..."
+	@find src -name "*.c" -not -path "*/cJSON.c" | xargs clang-format -i
+	@find src -name "*.h" -not -path "*/cJSON.h" | xargs clang-format -i
+	@echo "Formatting complete."
+
+format-check:
+	@echo "Checking code formatting..."
+	@find src -name "*.c" -not -path "*/cJSON.c" | xargs clang-format --dry-run --Werror
+	@find src -name "*.h" -not -path "*/cJSON.h" | xargs clang-format --dry-run --Werror
+	@echo "Format check passed."
+
+cppcheck:
+	@echo "Running static analysis with cppcheck..."
+	@cppcheck --enable=all --std=c99 --language=c \
+		--suppressions-list=.cppcheck-suppressions \
+		--error-exitcode=1 \
+		--inline-suppr \
+		-I src/include \
+		-I src/client/include \
+		-I src/server/include \
+		src/
+	@echo "Static analysis passed."
+
+cppcheck-report:
+	@echo "Generating cppcheck XML report..."
+	@cppcheck --enable=all --std=c99 --language=c \
+		--suppressions-list=.cppcheck-suppressions \
+		--inline-suppr \
+		-I src/include \
+		-I src/client/include \
+		-I src/server/include \
+		--xml --xml-version=2 \
+		src/ 2> cppcheck-report.xml
+	@echo "Report generated: cppcheck-report.xml"
+
+.PHONY: all client server test clean clean_tests lint format format-check cppcheck cppcheck-report

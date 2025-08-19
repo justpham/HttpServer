@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Pre-commit hook script for HttpServer project
+# This script runs linting checks before allowing commits
+
+set -e
+
+echo "Running pre-commit linting checks..."
+
+# Run format check
+echo "Checking code formatting..."
+make format-check
+
+# Run static analysis
+echo "Running static analysis..."
+make cppcheck
+
+echo "All linting checks passed!"
+exit 0

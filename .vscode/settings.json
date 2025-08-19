@@ -1,0 +1,27 @@
+{
+    "C_Cpp.default.cStandard": "c99",
+    "C_Cpp.default.cppStandard": "c++11",
+    "C_Cpp.default.includePath": [
+        "${workspaceFolder}/src/include",
+        "${workspaceFolder}/src/client/include",
+        "${workspaceFolder}/src/server/include"
+    ],
+    "C_Cpp.clang_format_path": "clang-format",
+    "C_Cpp.clang_format_style": "file",
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "ms-vscode.cpptools",
+    "files.associations": {
+        "*.c": "c",
+        "*.h": "c"
+    },
+    "cppcheck.cppcheckPath": "cppcheck",
+    "cppcheck.enable": true,
+    "cppcheck.language": "c",
+    "cppcheck.standard": ["c99"],
+    "cppcheck.includePaths": [
+        "${workspaceFolder}/src/include",
+        "${workspaceFolder}/src/client/include",
+        "${workspaceFolder}/src/server/include"
+    ],
+    "cppcheck.suppressionsFile": "${workspaceFolder}/.cppcheck-suppressions"
+}
