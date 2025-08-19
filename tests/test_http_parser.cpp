@@ -38,6 +38,54 @@ TEST_GROUP(ParseStartLineTests)
     }
 };
 
+TEST_GROUP(GetHeaderValueTests)
+{
+    HTTP_HEADER header1, header2, header3, header4;
+    const HTTP_HEADER* header_array[4];
+    
+    void setup()
+    {
+        // Setup test headers
+        strcpy(header1.key, "Content-Type");
+        strcpy(header1.value, "application/json");
+        
+        strcpy(header2.key, "Authorization");
+        strcpy(header2.value, "Bearer token123");
+        
+        strcpy(header3.key, "User-Agent");
+        strcpy(header3.value, "Mozilla/5.0");
+        
+        strcpy(header4.key, "Content-Length");
+        strcpy(header4.value, "1024");
+        
+        header_array[0] = &header1;
+        header_array[1] = &header2;
+        header_array[2] = &header3;
+        header_array[3] = &header4;
+    }
+
+    void teardown()
+    {
+        // Cleanup code for each test
+    }
+};
+
+TEST_GROUP(ReadLineTests)
+{
+    char buffer[1024];
+    
+    void setup()
+    {
+        // Clear the buffer before each test
+        memset(buffer, 0, sizeof(buffer));
+    }
+
+    void teardown()
+    {
+        // Cleanup code for each test
+    }
+};
+
 // Tests for parse_header function
 TEST(ParseHeaderTests, ParseHeaderValidInput)
 {
@@ -249,4 +297,258 @@ TEST(ParseStartLineTests, ParseStartLineResponseMalformedTwoComponents)
     char line[] = "HTTP/1.1 200\r\n";
     int result = parse_start_line(line, &start_line, RESPONSE);
     CHECK_EQUAL(-5, result);
+}
+
+// Tests for get_header_value function
+TEST(GetHeaderValueTests, GetHeaderValueValidKey)
+{
+    const char* value = get_header_value(header_array, 4, "Content-Type");
+    STRCMP_EQUAL("application/json", value);
+}
+
+TEST(GetHeaderValueTests, GetHeaderValueCaseInsensitive)
+{
+    const char* value = get_header_value(header_array, 4, "content-type");
+    STRCMP_EQUAL("application/json", value);
+    
+    value = get_header_value(header_array, 4, "AUTHORIZATION");
+    STRCMP_EQUAL("Bearer token123", value);
+    
+    value = get_header_value(header_array, 4, "user-agent");
+    STRCMP_EQUAL("Mozilla/5.0", value);
+}
+
+TEST(GetHeaderValueTests, GetHeaderValueKeyNotFound)
+{
+    const char* value = get_header_value(header_array, 4, "Non-Existent-Header");
+    POINTERS_EQUAL(NULL, value);
+}
+
+TEST(GetHeaderValueTests, GetHeaderValueNullHeaderArray)
+{
+    const char* value = get_header_value(NULL, 4, "Content-Type");
+    POINTERS_EQUAL(NULL, value);
+}
+
+TEST(GetHeaderValueTests, GetHeaderValueNullKey)
+{
+    const char* value = get_header_value(header_array, 4, NULL);
+    POINTERS_EQUAL(NULL, value);
+}
+
+TEST(GetHeaderValueTests, GetHeaderValueZeroLength)
+{
+    const char* value = get_header_value(header_array, 0, "Content-Type");
+    POINTERS_EQUAL(NULL, value);
+}
+
+TEST(GetHeaderValueTests, GetHeaderValueEmptyKey)
+{
+    const char* value = get_header_value(header_array, 4, "");
+    POINTERS_EQUAL(NULL, value);
+}
+
+TEST(GetHeaderValueTests, GetHeaderValueFirstHeader)
+{
+    const char* value = get_header_value(header_array, 4, "Content-Type");
+    STRCMP_EQUAL("application/json", value);
+}
+
+TEST(GetHeaderValueTests, GetHeaderValueLastHeader)
+{
+    const char* value = get_header_value(header_array, 4, "Content-Length");
+    STRCMP_EQUAL("1024", value);
+}
+
+TEST(GetHeaderValueTests, GetHeaderValueMiddleHeader)
+{
+    const char* value = get_header_value(header_array, 4, "Authorization");
+    STRCMP_EQUAL("Bearer token123", value);
+    
+    value = get_header_value(header_array, 4, "User-Agent");
+    STRCMP_EQUAL("Mozilla/5.0", value);
+}
+
+TEST(GetHeaderValueTests, GetHeaderValueSingleHeaderArray)
+{
+    const HTTP_HEADER* single_header_array[1] = { &header1 };
+    const char* value = get_header_value(single_header_array, 1, "Content-Type");
+    STRCMP_EQUAL("application/json", value);
+    
+    value = get_header_value(single_header_array, 1, "Authorization");
+    POINTERS_EQUAL(NULL, value);
+}
+
+// Tests for read_crlf_line function
+TEST(ReadLineTests, ReadSimpleLineWithNewlineShouldFail)
+{
+    const char* input = "Hello World\nNext line";
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
+    
+    // Should return NULL since only LF is not valid in HTTP
+    POINTERS_EQUAL(NULL, next);
+}
+
+TEST(ReadLineTests, ReadLineWithCRLF)
+{
+    const char* input = "HTTP/1.1 200 OK\r\nContent-Type: text/html";
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
+    
+    STRCMP_EQUAL("HTTP/1.1 200 OK", buffer);
+    STRCMP_EQUAL("Content-Type: text/html", next);
+}
+
+TEST(ReadLineTests, ReadLineWithoutCRLF)
+{
+    const char* input = "Last line without CRLF";
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
+    
+    // Should return NULL since no CRLF found
+    POINTERS_EQUAL(NULL, next);
+}
+
+TEST(ReadLineTests, ReadEmptyLineWithLFShouldFail)
+{
+    const char* input = "\nNext line";
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
+    
+    // Should return NULL since only LF is not valid
+    POINTERS_EQUAL(NULL, next);
+}
+
+TEST(ReadLineTests, ReadEmptyLineWithCRLF)
+{
+    const char* input = "\r\nNext line";
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
+    
+    STRCMP_EQUAL("", buffer);
+    STRCMP_EQUAL("Next line", next);
+}
+
+TEST(ReadLineTests, HandleNullInput)
+{
+    const char* next = read_crlf_line(NULL, buffer, sizeof(buffer));
+    
+    POINTERS_EQUAL(NULL, next);
+}
+
+TEST(ReadLineTests, HandleEmptyStringInput)
+{
+    const char* input = "";
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
+    
+    POINTERS_EQUAL(NULL, next);
+}
+
+TEST(ReadLineTests, HandleBufferSizeLimitWithCRLF)
+{
+    const char* input = "This is a very long line\r\nNext line";
+    char small_buffer[10];
+    const char* next = read_crlf_line(input, small_buffer, sizeof(small_buffer));
+    
+    // Should only copy 9 characters (buffer size - 1) and null terminate
+    STRCMP_EQUAL("This is a", small_buffer);
+    // Since we didn't find CRLF within buffer limit, should return NULL
+    POINTERS_EQUAL(NULL, next);
+}
+
+TEST(ReadLineTests, HandleConsecutiveCRLF)
+{
+    const char* input = "First line\r\n\r\n\r\nFourth line\r\n";
+    const char* next1 = read_crlf_line(input, buffer, sizeof(buffer));
+    STRCMP_EQUAL("First line", buffer);
+    
+    const char* next2 = read_crlf_line(next1, buffer, sizeof(buffer));
+    STRCMP_EQUAL("", buffer);
+    
+    const char* next3 = read_crlf_line(next2, buffer, sizeof(buffer));
+    STRCMP_EQUAL("", buffer);
+    
+    read_crlf_line(next3, buffer, sizeof(buffer));
+    STRCMP_EQUAL("Fourth line", buffer);
+}
+
+TEST(ReadLineTests, HandleCarriageReturnOnlyShouldFail)
+{
+    const char* input = "Line with CR only\rMore text";
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
+    
+    // Should return NULL since no CRLF found
+    POINTERS_EQUAL(NULL, next);
+}
+
+TEST(ReadLineTests, ReadHTTPHeaders)
+{
+    const char* input = "GET /path HTTP/1.1\r\nHost: example.com\r\nUser-Agent: TestAgent\r\n\r\nBody content";
+    
+    // Read request line
+    const char* next1 = read_crlf_line(input, buffer, sizeof(buffer));
+    STRCMP_EQUAL("GET /path HTTP/1.1", buffer);
+    
+    // Read Host header
+    const char* next2 = read_crlf_line(next1, buffer, sizeof(buffer));
+    STRCMP_EQUAL("Host: example.com", buffer);
+    
+    // Read User-Agent header
+    const char* next3 = read_crlf_line(next2, buffer, sizeof(buffer));
+    STRCMP_EQUAL("User-Agent: TestAgent", buffer);
+    
+    // Read empty line (header separator)
+    const char* next4 = read_crlf_line(next3, buffer, sizeof(buffer));
+    STRCMP_EQUAL("", buffer);
+    
+    // Body content has no CRLF, so should fail
+    const char* next5 = read_crlf_line(next4, buffer, sizeof(buffer));
+    POINTERS_EQUAL(NULL, next5);
+}
+
+TEST(ReadLineTests, SingleCharacterLineWithCRLF)
+{
+    const char* input = "A\r\nB";
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
+    
+    STRCMP_EQUAL("A", buffer);
+    STRCMP_EQUAL("B", next);
+}
+
+TEST(ReadLineTests, SingleCharacterLineWithLFShouldFail)
+{
+    const char* input = "A\nB";
+    const char* next = read_crlf_line(input, buffer, sizeof(buffer));
+    
+    // Should return NULL since only LF is not valid
+    POINTERS_EQUAL(NULL, next);
+}
+
+TEST(ReadLineTests, MinimalBufferSize)
+{
+    const char* input = "Hello\r\nWorld";
+    char tiny_buffer[1];
+    const char* next = read_crlf_line(input, tiny_buffer, sizeof(tiny_buffer));
+    
+    STRCMP_EQUAL("", tiny_buffer); // Should be empty string
+    // Should return NULL since no room to find CRLF within buffer
+    POINTERS_EQUAL(NULL, next);
+}
+
+TEST(ReadLineTests, PartialCRLFAtBufferBoundary)
+{
+    const char* input = "123456789\r\nNext";
+    char small_buffer[9]; // Can only fit "12345678" (8 chars + null), CRLF is beyond buffer limit
+    const char* next = read_crlf_line(input, small_buffer, sizeof(small_buffer));
+    
+    // Should copy "12345678" and return NULL since CRLF is beyond what we can check
+    STRCMP_EQUAL("12345678", small_buffer);
+    POINTERS_EQUAL(NULL, next);
+}
+
+TEST(ReadLineTests, CRLFAtExactBufferBoundary)
+{
+    const char* input = "12345\r\nNext";
+    char buffer_exact[8]; // Exactly fits "12345\r\n" + null terminator
+    const char* next = read_crlf_line(input, buffer_exact, sizeof(buffer_exact));
+    
+    // Should successfully read the line
+    STRCMP_EQUAL("12345", buffer_exact);
+    STRCMP_EQUAL("Next", next);
 }
