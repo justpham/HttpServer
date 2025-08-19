@@ -1,27 +1,27 @@
 
 #pragma once
 
+#include "macros.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include "macros.h"
 
 /***************************
- * 
+ *
  * HTTP Definitions
- * 
+ *
  ***************************/
-#define MAX_METHOD_LENGTH 10   // "OPTIONS" + null terminator
+#define MAX_METHOD_LENGTH 10     // "OPTIONS" + null terminator
 #define MAX_TARGET_LENGTH 2 * KB // Common URL length limit
-#define MAX_VERSION_LENGTH 10  // "HTTP/1.1" + null terminator
+#define MAX_VERSION_LENGTH 10    // "HTTP/1.1" + null terminator
 
 #define MAX_PROTOCOL_LENGTH 10       // "HTTP/1.1" + null terminator
 #define MAX_STATUS_CODE_LENGTH 4     // "200" + null terminator
 #define MAX_STATUS_MESSAGE_LENGTH 32 // "OK" + null terminator
 
-#define MAX_LINE_LENGTH 2 * KB  // Buffer size for reading HTTP lines
-#define MAX_HEADERS 50        // Maximum number of header pairs
+#define MAX_LINE_LENGTH 2 * KB   // Buffer size for reading HTTP lines
+#define MAX_HEADERS 50           // Maximum number of header pairs
 #define MAX_HEADER_LENGTH 8 * KB // Maximum length per header line
 
 #define HTTP_RESPONSE_START_LINE_PADDING                         \
@@ -29,7 +29,6 @@
         - (MAX_PROTOCOL_LENGTH + MAX_STATUS_CODE_LENGTH + MAX_STATUS_MESSAGE_LENGTH)
 
 #define MAX_HTTP_BODY_FILE_PATH 4 * KB
-
 
 enum HTTP_MESSAGE_TYPE
 {
@@ -86,13 +85,14 @@ typedef struct
     char value[MAX_HEADER_LENGTH];
 } HTTP_HEADER;
 
-typedef struct {
+typedef struct
+{
     HTTP_START_LINE start_line;
     HTTP_HEADER headers[MAX_HEADERS];
     int header_count;
-     FILE *body_fd;        // file descriptor for body contents
-     char body_path[MAX_HTTP_BODY_FILE_PATH]; // optional file path
-     int body_length;    // length of body in bytes
+    FILE *body_fd;                           // file descriptor for body contents
+    char body_path[MAX_HTTP_BODY_FILE_PATH]; // optional file path
+    int body_length;                         // length of body in bytes
 } HTTP_MESSAGE;
 
 /* HTTP_MESSAGE struct helper functions */

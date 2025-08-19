@@ -18,7 +18,8 @@ get_header_value(const HTTP_HEADER **header_array, const int length, const char 
     return NULL;
 }
 
-void init_http_message(HTTP_MESSAGE *msg)
+void
+init_http_message(HTTP_MESSAGE *msg)
 {
     if (!msg)
         return;
@@ -30,7 +31,8 @@ void init_http_message(HTTP_MESSAGE *msg)
     msg->body_length = 0;
 }
 
-void free_http_message(HTTP_MESSAGE *msg)
+void
+free_http_message(HTTP_MESSAGE *msg)
 {
     if (!msg)
         return;
@@ -50,7 +52,8 @@ void free_http_message(HTTP_MESSAGE *msg)
     // can reuse or free the struct as needed.
 }
 
-int http_message_set_body_fd(HTTP_MESSAGE *msg, FILE *fd, const char *path, int length)
+int
+http_message_set_body_fd(HTTP_MESSAGE *msg, FILE *fd, const char *path, int length)
 {
     if (!msg)
         return -1;
