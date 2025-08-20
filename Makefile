@@ -21,7 +21,7 @@ CXXFLAGS += -include $(CPPUTEST_HOME)/include/CppUTest/MemoryLeakDetectorNewMacr
 LD_LIBRARIES = -L$(CPPUTEST_HOME)/lib/aarch64-linux-gnu -lCppUTest -lCppUTestExt
 
 # Source Files
-COMMON_SOURCES = src$(SLASH)include$(SLASH)ip_helper.c src$(SLASH)include$(SLASH)cJSON.c src$(SLASH)include$(SLASH)http_parser.c
+COMMON_SOURCES = src$(SLASH)include$(SLASH)ip_helper.c src$(SLASH)include$(SLASH)cJSON.c src$(SLASH)include$(SLASH)http_parser.c src$(SLASH)include$(SLASH)http_lib.c src$(SLASH)include$(SLASH)http_builder.c
 CLIENT_SOURCES = src$(SLASH)client$(SLASH)include$(SLASH)connect.c $(COMMON_SOURCES)
 SERVER_SOURCES = src$(SLASH)server$(SLASH)include$(SLASH)connect.c $(COMMON_SOURCES)
 
@@ -39,9 +39,9 @@ server: $(BUILD_DIRECTORY)
 
 # Test targets
 test: $(TEST_BUILD_DIRECTORY)$(SLASH)test_runner
-	./$(TEST_BUILD_DIRECTORY)$(SLASH)test_runner
+	./$(TEST_BUILD_DIRECTORY)$(SLASH)test_runner -v
 
-$(TEST_BUILD_DIRECTORY)$(SLASH)test_runner: $(TEST_OBJECTS) $(TEST_BUILD_DIRECTORY)$(SLASH)connect.o $(TEST_BUILD_DIRECTORY)$(SLASH)ip_helper.o $(TEST_BUILD_DIRECTORY)$(SLASH)cJSON.o $(TEST_BUILD_DIRECTORY)$(SLASH)http_parser.o
+$(TEST_BUILD_DIRECTORY)$(SLASH)test_runner: $(TEST_OBJECTS) $(TEST_BUILD_DIRECTORY)$(SLASH)connect.o $(TEST_BUILD_DIRECTORY)$(SLASH)ip_helper.o $(TEST_BUILD_DIRECTORY)$(SLASH)cJSON.o $(TEST_BUILD_DIRECTORY)$(SLASH)http_parser.o $(TEST_BUILD_DIRECTORY)$(SLASH)http_lib.o $(TEST_BUILD_DIRECTORY)$(SLASH)http_builder.o $(TEST_BUILD_DIRECTORY)$(SLASH)send_mock.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LD_LIBRARIES)
 
 $(TEST_BUILD_DIRECTORY)$(SLASH)%.o: $(TEST_DIRECTORY)$(SLASH)%.cpp | $(TEST_BUILD_DIRECTORY)
@@ -58,6 +58,15 @@ $(TEST_BUILD_DIRECTORY)$(SLASH)cJSON.o: src$(SLASH)include$(SLASH)cJSON.c | $(TE
 
 $(TEST_BUILD_DIRECTORY)$(SLASH)http_parser.o: src$(SLASH)include$(SLASH)http_parser.c | $(TEST_BUILD_DIRECTORY)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(TEST_BUILD_DIRECTORY)$(SLASH)http_lib.o: src$(SLASH)include$(SLASH)http_lib.c | $(TEST_BUILD_DIRECTORY)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(TEST_BUILD_DIRECTORY)$(SLASH)http_builder.o: src$(SLASH)include$(SLASH)http_builder.c | $(TEST_BUILD_DIRECTORY)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(TEST_BUILD_DIRECTORY)$(SLASH)send_mock.o: $(TEST_DIRECTORY)$(SLASH)mocks$(SLASH)send_mock.c | $(TEST_BUILD_DIRECTORY)
+	$(CC) $(CFLAGS) $(INCLUDES) -I$(CPPUTEST_HOME)/include -c $< -o $@
 
 $(BUILD_DIRECTORY):
 	@if [ ! -d $(BUILD_DIRECTORY) ]; then mkdir -p $(BUILD_DIRECTORY); fi

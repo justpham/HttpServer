@@ -61,7 +61,7 @@ parse_start_line(char *line, HTTP_START_LINE *start_line, int http_message_type)
 
     if (http_message_type == REQUEST)
         num_parsed = sscanf(buffer, "%9s %2047s %9s", start_line->request.method,
-                            start_line->request.request_target, start_line->request.http_version);
+                            start_line->request.request_target, start_line->request.protocol);
 
     else if (http_message_type == RESPONSE)
         num_parsed = sscanf(buffer, "%9s %3s %31[^\r\n]", start_line->response.protocol,

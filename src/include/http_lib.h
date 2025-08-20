@@ -22,13 +22,16 @@
 
 #define MAX_LINE_LENGTH 2 * KB   // Buffer size for reading HTTP lines
 #define MAX_HEADERS 50           // Maximum number of header pairs
-#define MAX_HEADER_LENGTH 8 * KB // Maximum length per header line
+#define MAX_HEADER_LENGTH 4 * KB // Maximum length per header line
 
 #define HTTP_RESPONSE_START_LINE_PADDING                         \
     (MAX_METHOD_LENGTH + MAX_TARGET_LENGTH + MAX_VERSION_LENGTH) \
         - (MAX_PROTOCOL_LENGTH + MAX_STATUS_CODE_LENGTH + MAX_STATUS_MESSAGE_LENGTH)
 
 #define MAX_HTTP_BODY_FILE_PATH 4 * KB
+
+#define MAX_START_LINE_SIZE (MAX_METHOD_LENGTH + MAX_TARGET_LENGTH + MAX_VERSION_LENGTH) + 1
+#define MAX_HEADER_SIZE (MAX_HEADERS * MAX_HEADER_LENGTH) + MAX_START_LINE_SIZE
 
 enum HTTP_MESSAGE_TYPE
 {
@@ -46,7 +49,7 @@ typedef struct
 {
     char method[MAX_METHOD_LENGTH];         // HTTP method (e.g., GET, POST)
     char request_target[MAX_TARGET_LENGTH]; // Request target (e.g., /index.html)
-    char http_version[MAX_VERSION_LENGTH];  // HTTP version (e.g., HTTP/1.1)
+    char protocol[MAX_VERSION_LENGTH];      // HTTP version (e.g., HTTP/1.1)
 } HTTP_REQUEST_START_LINE;
 
 /*

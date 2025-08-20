@@ -199,7 +199,7 @@ TEST(ParseStartLineTests, ParseStartLineValidGetRequest)
     CHECK_EQUAL(0, result);
     STRCMP_EQUAL("GET", start_line.request.method);
     STRCMP_EQUAL("/index.html", start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", start_line.request.http_version);
+    STRCMP_EQUAL("HTTP/1.1", start_line.request.protocol);
 }
 
 TEST(ParseStartLineTests, ParseStartLineValidPostRequest)
@@ -210,7 +210,7 @@ TEST(ParseStartLineTests, ParseStartLineValidPostRequest)
     CHECK_EQUAL(0, result);
     STRCMP_EQUAL("POST", start_line.request.method);
     STRCMP_EQUAL("/api/users", start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", start_line.request.http_version);
+    STRCMP_EQUAL("HTTP/1.1", start_line.request.protocol);
 }
 
 TEST(ParseStartLineTests, ParseStartLineWithQueryString)
@@ -221,7 +221,7 @@ TEST(ParseStartLineTests, ParseStartLineWithQueryString)
     CHECK_EQUAL(0, result);
     STRCMP_EQUAL("GET", start_line.request.method);
     STRCMP_EQUAL("/search?q=test&page=1", start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", start_line.request.http_version);
+    STRCMP_EQUAL("HTTP/1.1", start_line.request.protocol);
 }
 
 TEST(ParseStartLineTests, ParseStartLineNullLine)
@@ -266,7 +266,7 @@ TEST(ParseStartLineTests, ParseStartLineWithExtraSpaces)
     CHECK_EQUAL(0, result);
     STRCMP_EQUAL("GET", start_line.request.method);
     STRCMP_EQUAL("/index.html", start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", start_line.request.http_version);
+    STRCMP_EQUAL("HTTP/1.1", start_line.request.protocol);
 }
 
 // Response start line tests
