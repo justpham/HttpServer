@@ -107,12 +107,12 @@ build_and_send_message(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
     if (msg->body_length == 0) {
         return 0;
     }
-    
+
     int bytes_remaining = msg->body_length;
-    char read_buf[FILE_READ_BUFFER_SIZE] = {0};
+    char read_buf[FILE_READ_BUFFER_SIZE] = { 0 };
 
     // Check if msg->body_fd is valid
-    if (!msg->body_fd) {
+    if (msg->body_fd == -1) {
         return -1;
     }
 
@@ -120,10 +120,14 @@ build_and_send_message(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
 
         lseek(msg->body_fd, 0, SEEK_SET);
 
-        int bytes_to_read = min(bytes_remaining, FILE_READ_BUFFER_SIZE);
+        int bytes_to_read = MIN(bytes_remaining, FILE_READ_BUFFER_SIZE);
 
-        int bytes_read = fread(read_buf, 1, bytes_to_read, msg->body_fd);
-        if (bytes_read <= 0) {
+        int bytes_read = read(msg->body_fd, read_buf, bytes_to_read);
+        if (bytes_read == -1) {
+            perror("read failed");
+            return -2;
+        } else if (bytes_read == 0) {
+            // Nothing has been read so nothing to actually send
             break;
         }
 

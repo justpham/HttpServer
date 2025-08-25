@@ -128,11 +128,13 @@ parse_header(char *line, HTTP_HEADER *header)
 
 /*
     Parses the HTTP body to output to a file descriptor
+
+    This function assumes that out_fd is valid
 */
 int
-parse_body(const char *body_buffer, int content_length, FILE *out_fd)
+parse_body(const char *body_buffer, int content_length, int out_fd)
 {
-    if (!body_buffer || content_length < 0 || !out_fd) {
+    if (!body_buffer || content_length < 0 || out_fd < 0) {
         fprintf(stderr, "Invalid arguments to parse_body()\n");
         return -1;
     }
@@ -146,12 +148,11 @@ parse_body(const char *body_buffer, int content_length, FILE *out_fd)
 
     while (remaining > 0) {
         size_t to_write = remaining > (int) CHUNK ? CHUNK : (size_t) remaining;
-        size_t written = fwrite(p, 1, to_write, out_fd);
-        if (written == 0) {
-            if (ferror(out_fd)) {
-                perror("write to fd failed");
-                return -2;
-            }
+        ssize_t written = write(out_fd, p, to_write);
+        if (written == -1) {
+            perror("write to fd failed");
+            return -2;
+        } else if (written == 0) {
             /* Nothing written but no error: avoid infinite loop */
             break;
         }
@@ -159,19 +160,23 @@ parse_body(const char *body_buffer, int content_length, FILE *out_fd)
         remaining -= (int) written;
     }
 
-    if (fflush(out_fd) != 0) {
-        perror("fflush");
+    if (fsync(out_fd) != 0) {
+        perror("fsync");
         return -3;
     }
 
     return remaining == 0 ? 0 : -4;
 }
 
-// Stream body from an input FILE* (e.g. socket via fdopen) to output FILE*
+/*
+    Streams the HTTP body from an input socket fd to an output file descriptor
+
+    This function assumes that in_fd (socket descriptor) and out_fd (file descriptor) are valid
+*/
 int
-parse_body_stream(FILE *in_fd, int content_length, FILE *out_fd)
+parse_body_stream(int in_fd, int content_length, char *buffer, int out_fd)
 {
-    if (!in_fd || !out_fd || content_length < 0) {
+    if (in_fd < 0 || out_fd < 0 || content_length < 0) {
         fprintf(stderr, "Invalid arguments to parse_body_stream()\n");
         return -1;
     }
@@ -179,25 +184,36 @@ parse_body_stream(FILE *in_fd, int content_length, FILE *out_fd)
     if (content_length == 0)
         return 0;
 
-    char buffer[8192];
     int remaining = content_length;
+
+    if (buffer && strlen(buffer) > 0) {
+        // Write the remaining contents of the current buffer to the file
+        size_t written = write(out_fd, buffer, strlen(buffer));
+        if (written != strlen(buffer)) {
+            perror("write failed");
+            return -4;
+        }
+        remaining -= written;
+    }
 
     while (remaining > 0) {
         size_t to_read = remaining > (int) sizeof(buffer) ? sizeof(buffer) : (size_t) remaining;
-        size_t r = fread(buffer, 1, to_read, in_fd);
+        ssize_t r = recv(in_fd, buffer, to_read, 0);
+
+        // TODO : Add a time out system
+
         if (r == 0) {
-            if (feof(in_fd)) {
-                fprintf(stderr, "Unexpected EOF while reading body\n");
-                return -2;
-            }
-            if (ferror(in_fd)) {
-                perror("read failed");
-                return -3;
-            }
+            fprintf(stderr, "Unexpected EOF while reading body\n");
+            return -2;
         }
 
-        size_t written = fwrite(buffer, 1, r, out_fd);
-        if (written != r) {
+        if (r == -1) {
+            perror("read failed");
+            return -3;
+        }
+
+        size_t written = write(out_fd, buffer, r);
+        if ((ssize_t) written != r) {
             perror("write failed");
             return -4;
         }
@@ -205,10 +221,146 @@ parse_body_stream(FILE *in_fd, int content_length, FILE *out_fd)
         remaining -= (int) r;
     }
 
-    if (fflush(out_fd) != 0) {
-        perror("fflush");
+    if (fsync(out_fd) != 0) {
+        perror("fsync");
         return -5;
     }
 
     return 0;
+}
+
+HTTP_MESSAGE
+parse_http_message(int client_fd, int http_message_type)
+{
+
+    // Recieve HTTP Request
+    char buffer[8 * KB] = { 0 };
+
+    char *recv_start = &buffer[0]; // Point at the start of the array
+    int recv_offset = 0;
+
+    ssize_t bytes_received;
+    int is_start_line = 1;
+    int return_code = 0;
+    int end_of_header = 0;
+    int current_buffer_length = 0;
+
+    HTTP_MESSAGE request = init_http_message();
+
+    // Parse the initial header section of the HTTP request
+    while ((bytes_received = recv(client_fd, recv_start, sizeof(buffer) - recv_offset - 1, 0)) > 0) {
+
+        bytes_received += recv_offset;
+
+        buffer[bytes_received] = '\0'; // Null-terminate the received data
+
+        recv_offset = 0;
+        recv_start = &buffer[recv_offset];
+
+        // TODO: Add a timeout system
+
+        if (bytes_received == -1) {
+            perror("recv failed");
+            break;
+        }
+
+        if (request.header_count >= MAX_HEADERS) {
+            fprintf(stderr, "Maximum header count exceeded\n");
+            break;
+        }
+
+        while (bytes_received > 0) {
+
+            char *crlf = strstr(buffer, "\r\n");
+
+            // If we cannot find the CRLF at the end of the buffer, receive more data
+            if (!crlf) {
+
+                recv_offset = bytes_received;
+                recv_start = &buffer[recv_offset];
+
+                memset(recv_start, 0, sizeof(buffer) - recv_offset);
+
+                break;
+            }
+
+            if (strlen(buffer) >= 2 && strncmp(buffer, "\r\n", 2) == 0) {
+
+                crlf += 1; // Move to '\n' of CRLF
+                *crlf = '\0'; // Null-terminate the line
+                current_buffer_length = strlen(buffer);
+
+                memmove(buffer, crlf + 1,  bytes_received - current_buffer_length);
+                bytes_received -= current_buffer_length;
+
+                end_of_header = 1;
+
+                break;
+            }
+
+            // Recieve the current crlf line from the buffer
+            crlf += 1; // Move to '\n' of CRLF
+            *crlf = '\0'; // Null-terminate the line
+            current_buffer_length = strlen(buffer);
+
+            // Process the line (e.g., parse headers)
+            if (is_start_line) {
+                if (parse_start_line(buffer, &request.start_line, http_message_type) < 0) {
+                    fprintf(stderr, "Failed to parse start line: '%s'\n", buffer);
+                }
+                is_start_line = 0;
+            } else {
+                if (parse_header(buffer, &request.headers[request.header_count++]) < 0) {
+                    fprintf(stderr, "Failed to parse header: '%s'\n", buffer);
+                }
+                printf("Parsed header: '%s: %s'\n", request.headers[request.header_count - 1].key, request.headers[request.header_count - 1].value);
+            }
+
+            // Remove the processed line from the buffer
+            memmove(buffer, crlf + 1,  bytes_received - current_buffer_length);
+            bytes_received -= current_buffer_length + 1;
+
+        }
+
+        if (end_of_header) {    // TODO: Refactor it so it's nicer
+            break;
+        }
+
+    }
+
+    printf("End of header parse\n");
+
+    const char* content_length = get_header_value(request.headers, request.header_count, "Content-Length");
+
+    if (content_length) {
+        request.body_length = atoi(content_length);
+    } else {
+        request.body_length = 0;
+    }
+
+    if (request.body_length > 0) {
+        /*
+        For every request we want to store the body in a temporary file
+
+        Body may be too large to store in memory
+
+        TODO: For multiple simultaneous requests, use a unique temp file for each request
+        */
+        int temp_file = open("/tmp/http_body", O_RDWR | O_CREAT | O_TRUNC, 0666);
+        if (temp_file < 0) {
+            perror("open");
+            return request;
+        }
+
+        unlink("/tmp/http_body"); // Ensure the file is deleted after closing
+
+        http_message_set_body_fd(&request, temp_file, "/tmp/http_body", request.body_length);
+
+        // Parse the body
+        if ((return_code = parse_body_stream(client_fd, request.body_length, buffer, temp_file)) != 0) {
+            fprintf(stderr, "Failed to parse body. Return code: %d\n", return_code);
+        }
+    }
+
+    return request;
 }

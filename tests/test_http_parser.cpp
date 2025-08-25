@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/socket.h>
 
 extern "C" {
     #include "http_parser.h"
@@ -42,28 +43,23 @@ TEST_GROUP(ParseStartLineTests)
 
 TEST_GROUP(GetHeaderValueTests)
 {
-    HTTP_HEADER header1, header2, header3, header4;
-    const HTTP_HEADER* header_array[4];
+    HTTP_HEADER header_array[4];
     
     void setup()
     {
         // Setup test headers
-        strcpy(header1.key, "Content-Type");
-        strcpy(header1.value, "application/json");
+        strcpy(header_array[0].key, "Content-Type");
+        strcpy(header_array[0].value, "application/json");
+
+        strcpy(header_array[1].key, "Authorization");
+        strcpy(header_array[1].value, "Bearer token123");
+
+        strcpy(header_array[2].key, "User-Agent");
+        strcpy(header_array[2].value, "Mozilla/5.0");
+
+        strcpy(header_array[3].key, "Content-Length");
+        strcpy(header_array[3].value, "1024");
         
-        strcpy(header2.key, "Authorization");
-        strcpy(header2.value, "Bearer token123");
-        
-        strcpy(header3.key, "User-Agent");
-        strcpy(header3.value, "Mozilla/5.0");
-        
-        strcpy(header4.key, "Content-Length");
-        strcpy(header4.value, "1024");
-        
-        header_array[0] = &header1;
-        header_array[1] = &header2;
-        header_array[2] = &header3;
-        header_array[3] = &header4;
     }
 
     void teardown()
@@ -377,7 +373,10 @@ TEST(GetHeaderValueTests, GetHeaderValueMiddleHeader)
 
 TEST(GetHeaderValueTests, GetHeaderValueSingleHeaderArray)
 {
-    const HTTP_HEADER* single_header_array[1] = { &header1 };
+    HTTP_HEADER single_header_array[1];
+    strcpy(single_header_array[0].key, "Content-Type");
+    strcpy(single_header_array[0].value, "application/json");
+
     const char* value = get_header_value(single_header_array, 1, "Content-Type");
     STRCMP_EQUAL("application/json", value);
     
@@ -601,9 +600,9 @@ TEST(ParseBodyTests, ValidSmallBody)
 {
     const char* body_content = "Hello, World!";
     int content_length = strlen(body_content);
-    
-    int result = parse_body(body_content, content_length, temp_file);
-    
+
+    int result = parse_body(body_content, content_length, fileno(temp_file));
+
     LONGS_EQUAL(0, result);
     verify_file_content(body_content, content_length);
 }
@@ -612,9 +611,9 @@ TEST(ParseBodyTests, EmptyBody)
 {
     const char* body_content = "";
     int content_length = 0;
-    
-    int result = parse_body(body_content, content_length, temp_file);
-    
+
+    int result = parse_body(body_content, content_length, fileno(temp_file));
+
     LONGS_EQUAL(0, result);
     verify_file_content("", 0);
 }
@@ -630,9 +629,9 @@ TEST(ParseBodyTests, LargeBody)
         large_body[i] = 'A' + (i % 26);
     }
     large_body[content_length] = '\0';
-    
-    int result = parse_body(large_body, content_length, temp_file);
-    
+
+    int result = parse_body(large_body, content_length, fileno(temp_file));
+
     LONGS_EQUAL(0, result);
     verify_file_content(large_body, content_length);
     
@@ -641,21 +640,21 @@ TEST(ParseBodyTests, LargeBody)
 
 TEST(ParseBodyTests, NullBodyBuffer)
 {
-    int result = parse_body(NULL, 10, temp_file);
+    int result = parse_body(NULL, 10, fileno(temp_file));
     LONGS_EQUAL(-1, result);
 }
 
 TEST(ParseBodyTests, NullFilePointer)
 {
     const char* body_content = "test";
-    int result = parse_body(body_content, 4, NULL);
+    int result = parse_body(body_content, 4, -1);
     LONGS_EQUAL(-1, result);
 }
 
 TEST(ParseBodyTests, NegativeContentLength)
 {
     const char* body_content = "test";
-    int result = parse_body(body_content, -1, temp_file);
+    int result = parse_body(body_content, -1, fileno(temp_file));
     LONGS_EQUAL(-1, result);
 }
 
@@ -664,9 +663,9 @@ TEST(ParseBodyTests, BinaryData)
     // Test with binary data including null bytes
     unsigned char binary_data[] = {0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0xFD, 0x00, 0x05};
     int content_length = sizeof(binary_data);
-    
-    int result = parse_body((const char*)binary_data, content_length, temp_file);
-    
+
+    int result = parse_body((const char*)binary_data, content_length, fileno(temp_file));
+
     LONGS_EQUAL(0, result);
     
     // Verify binary content
@@ -680,19 +679,18 @@ TEST(ParseBodyTests, BinaryData)
 
 TEST_GROUP(ParseBodyStreamTests)
 {
-    FILE* input_file;
+    int socket_pair[2];  // [0] for reading (socket side), [1] for writing (test side)
     FILE* output_file;
-    char input_filename[256];
     char output_filename[256];
-    
+    bool write_socket_closed;
+    char buffer[8192] = {0};
+
     void setup()
     {
-        // Create temporary input file
-        strcpy(input_filename, "/tmp/test_input_XXXXXX");
-        int in_fd = mkstemp(input_filename);
-        CHECK(in_fd != -1);
-        input_file = fdopen(in_fd, "w+");
-        CHECK(input_file != NULL);
+        // Create socket pair for input (simulating socket communication)
+        int result = socketpair(AF_UNIX, SOCK_STREAM, 0, socket_pair);
+        CHECK(result == 0);
+        write_socket_closed = false;
         
         // Create temporary output file
         strcpy(output_filename, "/tmp/test_output_XXXXXX");
@@ -704,22 +702,34 @@ TEST_GROUP(ParseBodyStreamTests)
 
     void teardown()
     {
-        if (input_file) {
-            fclose(input_file);
+        close(socket_pair[0]);
+        if (!write_socket_closed) {
+            close(socket_pair[1]);
         }
+        
         if (output_file) {
             fclose(output_file);
         }
-        unlink(input_filename);
         unlink(output_filename);
     }
     
-    void write_to_input_file(const char* content, int length)
+    void write_to_socket(const char* content, int length)
     {
-        rewind(input_file);
-        fwrite(content, 1, length, input_file);
-        fflush(input_file);
-        rewind(input_file);
+        ssize_t total_written = 0;
+        while (total_written < length) {
+            ssize_t written = write(socket_pair[1], content + total_written, 
+                                   length - total_written);
+            CHECK(written > 0);
+            total_written += written;
+        }
+    }
+    
+    void close_write_socket()
+    {
+        if (!write_socket_closed) {
+            close(socket_pair[1]);
+            write_socket_closed = true;
+        }
     }
     
     void verify_output_content(const char* expected_content, int expected_length)
@@ -741,9 +751,9 @@ TEST(ParseBodyStreamTests, ValidSmallBodyStream)
     const char* body_content = "Hello from stream!";
     int content_length = strlen(body_content);
     
-    write_to_input_file(body_content, content_length);
+    write_to_socket(body_content, content_length);
     
-    int result = parse_body_stream(input_file, content_length, output_file);
+    int result = parse_body_stream(socket_pair[0], content_length, buffer, fileno(output_file));
     
     LONGS_EQUAL(0, result);
     verify_output_content(body_content, content_length);
@@ -752,9 +762,9 @@ TEST(ParseBodyStreamTests, ValidSmallBodyStream)
 TEST(ParseBodyStreamTests, EmptyBodyStream)
 {
     int content_length = 0;
-    
-    int result = parse_body_stream(input_file, content_length, output_file);
-    
+
+    int result = parse_body_stream(socket_pair[0], content_length, buffer, fileno(output_file));
+
     LONGS_EQUAL(0, result);
     verify_output_content("", 0);
 }
@@ -771,10 +781,10 @@ TEST(ParseBodyStreamTests, LargeBodyStream)
     }
     large_body[content_length] = '\0';
     
-    write_to_input_file(large_body, content_length);
-    
-    int result = parse_body_stream(input_file, content_length, output_file);
-    
+    write_to_socket(large_body, content_length);
+
+    int result = parse_body_stream(socket_pair[0], content_length, buffer, fileno(output_file));
+
     LONGS_EQUAL(0, result);
     verify_output_content(large_body, content_length);
     
@@ -783,19 +793,19 @@ TEST(ParseBodyStreamTests, LargeBodyStream)
 
 TEST(ParseBodyStreamTests, NullInputFile)
 {
-    int result = parse_body_stream(NULL, 10, output_file);
+    int result = parse_body_stream(-1, 10, buffer, fileno(output_file));
     LONGS_EQUAL(-1, result);
 }
 
 TEST(ParseBodyStreamTests, NullOutputFile)
 {
-    int result = parse_body_stream(input_file, 10, NULL);
+    int result = parse_body_stream(socket_pair[0], 10, buffer, -1);
     LONGS_EQUAL(-1, result);
 }
 
 TEST(ParseBodyStreamTests, NegativeContentLength)
 {
-    int result = parse_body_stream(input_file, -1, output_file);
+    int result = parse_body_stream(socket_pair[0], -1, buffer, fileno(output_file));
     LONGS_EQUAL(-1, result);
 }
 
@@ -805,10 +815,12 @@ TEST(ParseBodyStreamTests, UnexpectedEOF)
     int partial_length = strlen(partial_content);
     int expected_length = 20; // Expect more than what's available
     
-    write_to_input_file(partial_content, partial_length);
-    
-    int result = parse_body_stream(input_file, expected_length, output_file);
-    
+    write_to_socket(partial_content, partial_length);
+    // Close the writing end to simulate EOF
+    close_write_socket();
+
+    int result = parse_body_stream(socket_pair[0], expected_length, buffer, fileno(output_file));
+
     LONGS_EQUAL(-2, result); // Should return -2 for unexpected EOF
 }
 
@@ -818,10 +830,10 @@ TEST(ParseBodyStreamTests, BinaryDataStream)
     unsigned char binary_data[] = {0x10, 0x20, 0x00, 0x30, 0xFF, 0x00, 0x40, 0x50};
     int content_length = sizeof(binary_data);
     
-    write_to_input_file((const char*)binary_data, content_length);
-    
-    int result = parse_body_stream(input_file, content_length, output_file);
-    
+    write_to_socket((const char*)binary_data, content_length);
+
+    int result = parse_body_stream(socket_pair[0], content_length, buffer, fileno(output_file));
+
     LONGS_EQUAL(0, result);
     
     // Verify binary content

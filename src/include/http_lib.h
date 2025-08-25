@@ -2,10 +2,12 @@
 #pragma once
 
 #include "macros.h"
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <unistd.h>
 
 /***************************
  *
@@ -93,15 +95,16 @@ typedef struct
     HTTP_START_LINE start_line;
     HTTP_HEADER headers[MAX_HEADERS];
     int header_count;
-    FILE *body_fd;                           // file descriptor for body contents
+    int body_fd;                             // file descriptor for body contents
     char body_path[MAX_HTTP_BODY_FILE_PATH]; // optional file path
     int body_length;                         // length of body in bytes
 } HTTP_MESSAGE;
 
 /* HTTP_MESSAGE struct helper functions */
-void init_http_message(HTTP_MESSAGE *msg);
+HTTP_MESSAGE init_http_message();
 void free_http_message(HTTP_MESSAGE *msg);
-int http_message_set_body_fd(HTTP_MESSAGE *msg, FILE *fd, const char *path, int length);
+int http_message_set_body_fd(HTTP_MESSAGE *msg, int fd, const char *path, int length);
+void print_http_message(const HTTP_MESSAGE *msg);
 
 // Library functions
-const char *get_header_value(const HTTP_HEADER **header_array, const int length, const char *key);
+const char *get_header_value(const HTTP_HEADER *header_array, const int length, const char *key);

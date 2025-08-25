@@ -19,7 +19,7 @@ TEST_GROUP(BuildHeaderTests)
     void setup()
     {
         // Initialize HTTP_MESSAGE for each test
-        init_http_message(&msg);
+        msg = init_http_message();
         memset(buffer, 0, sizeof(buffer));
     }
 
@@ -302,7 +302,7 @@ TEST_GROUP(BuildAndSendHeadersTests)
     void setup()
     {
         // Initialize HTTP_MESSAGE for each test
-        init_http_message(&msg);
+        msg = init_http_message();
         // Use a mock socket fd (we can't easily test actual network sends in unit tests)
         // In real testing, you might use a pipe or mock framework
         mock_socket_fd = 42; // Arbitrary valid-looking fd

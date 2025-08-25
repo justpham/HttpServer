@@ -4,6 +4,7 @@
 
 #define _GNU_SOURCE
 
+#include "http_parser.h"
 #include "include/connect.h"
 #include "ip_helper.h"
 #include "macros.h"
@@ -33,7 +34,28 @@ main(void)
             continue;
         }
 
-        handle_client_connection(sockfd, new_fd, "Hello, world!");
+        if (!fork()) {
+            close(sockfd); // child doesn't need this
+
+            // Recieve HTTP Request
+            HTTP_MESSAGE request = parse_http_message(new_fd, REQUEST);
+
+            // Print out the request info for now...
+            print_http_message(&request);
+
+            // Handle HTTP Headers
+
+            // Handle HTTP Body
+
+            // Send HTTP Response
+
+
+            // Clean everything up
+            free_http_message(&request);
+            close(new_fd);
+
+            exit(0);
+        }
 
         close(new_fd); // parent doesn't need this
     }
