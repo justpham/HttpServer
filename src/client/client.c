@@ -32,12 +32,12 @@ main(int argc, char *argv[])
     const char *dummy_http_request = "GET / HTTP/1.1\r\n"
                                      "Host: example.com\r\n"
                                      "User-Agent: TestClient/1.0\r\nAccept:";
-                                     
-    const char *dummy_http_request_2 =  " */*\r\n"
-                                        "X-Dummy-Header: hello-world\r\n"
-                                        "Content-Length: 20\r\n"
-                                        "\r\n"
-                                        "Sample Body!!!\n";
+
+    const char *dummy_http_request_2 = " */*\r\n"
+                                       "X-Dummy-Header: hello-world\r\n"
+                                       "Content-Length: 20\r\n"
+                                       "\r\n"
+                                       "Sample Body!!!\n";
 
     // TODO: Setup streaming test....
 

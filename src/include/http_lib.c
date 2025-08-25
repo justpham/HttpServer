@@ -142,7 +142,7 @@ print_http_message(const HTTP_MESSAGE *msg)
                 char body_buffer[8192];
                 ssize_t bytes_read;
                 while ((bytes_read = read(msg->body_fd, body_buffer, sizeof(body_buffer))) > 0) {
-                    fwrite(body_buffer, 1, (size_t)bytes_read, stdout);
+                    fwrite(body_buffer, 1, (size_t) bytes_read, stdout);
                 }
                 if (bytes_read == -1) {
                     perror("read body");

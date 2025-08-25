@@ -49,7 +49,6 @@ main(void)
 
             // Send HTTP Response
 
-
             // Clean everything up
             free_http_message(&request);
             close(new_fd);

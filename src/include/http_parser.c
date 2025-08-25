@@ -248,7 +248,8 @@ parse_http_message(int client_fd, int http_message_type)
     HTTP_MESSAGE request = init_http_message();
 
     // Parse the initial header section of the HTTP request
-    while ((bytes_received = recv(client_fd, recv_start, sizeof(buffer) - recv_offset - 1, 0)) > 0) {
+    while ((bytes_received = recv(client_fd, recv_start, sizeof(buffer) - recv_offset - 1, 0))
+           > 0) {
 
         bytes_received += recv_offset;
 
@@ -286,11 +287,11 @@ parse_http_message(int client_fd, int http_message_type)
 
             if (strlen(buffer) >= 2 && strncmp(buffer, "\r\n", 2) == 0) {
 
-                crlf += 1; // Move to '\n' of CRLF
+                crlf += 1;    // Move to '\n' of CRLF
                 *crlf = '\0'; // Null-terminate the line
                 current_buffer_length = strlen(buffer);
 
-                memmove(buffer, crlf + 1,  bytes_received - current_buffer_length);
+                memmove(buffer, crlf + 1, bytes_received - current_buffer_length);
                 bytes_received -= current_buffer_length;
 
                 end_of_header = 1;
@@ -299,7 +300,7 @@ parse_http_message(int client_fd, int http_message_type)
             }
 
             // Recieve the current crlf line from the buffer
-            crlf += 1; // Move to '\n' of CRLF
+            crlf += 1;    // Move to '\n' of CRLF
             *crlf = '\0'; // Null-terminate the line
             current_buffer_length = strlen(buffer);
 
@@ -313,24 +314,24 @@ parse_http_message(int client_fd, int http_message_type)
                 if (parse_header(buffer, &request.headers[request.header_count++]) < 0) {
                     fprintf(stderr, "Failed to parse header: '%s'\n", buffer);
                 }
-                printf("Parsed header: '%s: %s'\n", request.headers[request.header_count - 1].key, request.headers[request.header_count - 1].value);
+                printf("Parsed header: '%s: %s'\n", request.headers[request.header_count - 1].key,
+                       request.headers[request.header_count - 1].value);
             }
 
             // Remove the processed line from the buffer
-            memmove(buffer, crlf + 1,  bytes_received - current_buffer_length);
+            memmove(buffer, crlf + 1, bytes_received - current_buffer_length);
             bytes_received -= current_buffer_length + 1;
-
         }
 
-        if (end_of_header) {    // TODO: Refactor it so it's nicer
+        if (end_of_header) { // TODO: Refactor it so it's nicer
             break;
         }
-
     }
 
     printf("End of header parse\n");
 
-    const char* content_length = get_header_value(request.headers, request.header_count, "Content-Length");
+    const char *content_length
+        = get_header_value(request.headers, request.header_count, "Content-Length");
 
     if (content_length) {
         request.body_length = atoi(content_length);
@@ -357,7 +358,8 @@ parse_http_message(int client_fd, int http_message_type)
         http_message_set_body_fd(&request, temp_file, "/tmp/http_body", request.body_length);
 
         // Parse the body
-        if ((return_code = parse_body_stream(client_fd, request.body_length, buffer, temp_file)) != 0) {
+        if ((return_code = parse_body_stream(client_fd, request.body_length, buffer, temp_file))
+            != 0) {
             fprintf(stderr, "Failed to parse body. Return code: %d\n", return_code);
         }
     }
