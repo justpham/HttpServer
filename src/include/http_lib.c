@@ -73,9 +73,13 @@ http_message_set_body_fd(HTTP_MESSAGE *msg, int fd, const char *path, int length
     if (!msg)
         return -1;
 
-    if (strlen(path) > sizeof(msg->body_path)) {
-        fprintf(stderr, "Provided path is too long for body_path buffer\n");
-        return -2;
+    /* Guard against NULL path before calling strlen() */
+    if (path) {
+        size_t pathlen = strlen(path);
+        if (pathlen >= sizeof(msg->body_path)) {
+            fprintf(stderr, "Provided path is too long for body_path buffer\n");
+            return -2;
+        }
     }
 
     // Close any previously-open fd/path

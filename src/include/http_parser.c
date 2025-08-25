@@ -314,8 +314,6 @@ parse_http_message(int client_fd, int http_message_type)
                 if (parse_header(buffer, &request.headers[request.header_count++]) < 0) {
                     fprintf(stderr, "Failed to parse header: '%s'\n", buffer);
                 }
-                printf("Parsed header: '%s: %s'\n", request.headers[request.header_count - 1].key,
-                       request.headers[request.header_count - 1].value);
             }
 
             // Remove the processed line from the buffer
@@ -327,8 +325,6 @@ parse_http_message(int client_fd, int http_message_type)
             break;
         }
     }
-
-    printf("End of header parse\n");
 
     const char *content_length
         = get_header_value(request.headers, request.header_count, "Content-Length");

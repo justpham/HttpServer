@@ -4,6 +4,8 @@
 
 #define _GNU_SOURCE
 
+#include "http_builder.h"
+#include "http_parser.h"
 #include "include/connect.h"
 #include <arpa/inet.h>
 #include <errno.h>
@@ -28,39 +30,31 @@ main(int argc, char *argv[])
 
     int sockfd = connect_to_host(argv[1]);
 
-    // Send a valid HTTP Request with additional headers
-    const char *dummy_http_request = "GET / HTTP/1.1\r\n"
-                                     "Host: example.com\r\n"
-                                     "User-Agent: TestClient/1.0\r\nAccept:";
+    // Create HTTP Request
+    HTTP_MESSAGE request = init_http_message();
+    strcpy(request.start_line.request.method, "GET");
+    strcpy(request.start_line.request.request_target, "/");
+    strcpy(request.start_line.request.protocol, "HTTP/1.1");
 
-    const char *dummy_http_request_2 = " */*\r\n"
-                                       "X-Dummy-Header: hello-world\r\n"
-                                       "Content-Length: 20\r\n"
-                                       "\r\n"
-                                       "Sample Body!!!\n";
+    // Set headers
+    request.header_count = 4;
+    strcpy(request.headers[0].key, "Host");
+    strcpy(request.headers[0].value, argv[1]);
+    strcpy(request.headers[1].key, "User-Agent");
+    strcpy(request.headers[1].value, "TestClient/1.0");
+    strcpy(request.headers[2].key, "Accept");
+    strcpy(request.headers[2].value, "*/*");
+    strcpy(request.headers[3].key, "Connection");
+    strcpy(request.headers[3].value, "close");
 
-    // TODO: Setup streaming test....
+    // Send the request
+    build_and_send_message(&request, sockfd, REQUEST);
 
-    printf("Sending HTTP request:\n%s", dummy_http_request);
+    // Recieve the HTTP Response
+    HTTP_MESSAGE response = parse_http_message(sockfd, RESPONSE);
+    print_http_message(&response);
 
-    send(sockfd, dummy_http_request, strlen(dummy_http_request), 0);
-
-    printf("Sleeping...\n");
-
-    printf("Sending additional data...\n");
-
-    sleep(5);
-
-    printf("Sending HTTP request:\n%s", dummy_http_request_2);
-
-    send(sockfd, dummy_http_request_2, strlen(dummy_http_request_2), 0);
-
-    sleep(5);
-
-    printf("Sending hello\n");
-
-    send(sockfd, "hello", 5, 0);
-
+    free_http_message(&response);
     close(sockfd);
 
     return 0;

@@ -1,11 +1,11 @@
 #include "http_builder.h"
 
 /*
-    Builds all headers + start line for an HTTP message
+    Builds all headers + start line for an HTTP message into a buffer
     and sends it through the socket file descriptor
 
     Flow:
-        1. Build Start Line + Headers
+        1. Build Start Line + Headers into a buffer
         2. Send To Socket
 
     Parameters:
@@ -132,7 +132,11 @@ build_and_send_message(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
         }
 
         int bytes_sent = send(sock_fd, read_buf, bytes_read, 0);
-        if (bytes_sent <= 0) {
+        if (bytes_sent < 0) {
+            perror("send failed");
+            return -3;
+        } else if (bytes_sent == 0) {
+            // Nothing has been sent so nothing to actually read
             break;
         }
 
