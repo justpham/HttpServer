@@ -6,7 +6,7 @@ TEST_BUILD_DIRECTORY = $(BUILD_DIRECTORY)$(SLASH)tests
 # Compiler settings
 CC = gcc
 CXX = g++
-CFLAGS = -Wall -Wextra -std=c99
+CFLAGS = -Wall -Wextra -std=c99 -g
 CXXFLAGS = -Wall -Wextra -std=c++11
 
 # Libraries
