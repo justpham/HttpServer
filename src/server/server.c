@@ -27,15 +27,16 @@ server_router (HTTP_MESSAGE *request, HTTP_MESSAGE *response)
 {
 
     char *route = request->start_line.request.request_target;
-    char *method = request->start_line.request.method;
+    char method[MAX_METHOD_LENGTH] = { 0 };
+    get_value_from_http_method(request->start_line.request.method, method, sizeof(method));
 
-    strcpy(response->start_line.response.protocol, request->start_line.request.protocol);
+    response->start_line.response.protocol = request->start_line.request.protocol;
 
     if (strcmp(route, "/") == 0) {
 
         if (strcmp(method, "GET") == 0) {
 
-            strcpy(response->start_line.response.status_code, "200");
+            response->start_line.response.status_code = STATUS_OK;
             strcpy(response->start_line.response.status_message, "OK");
 
             response->header_count = 4;
@@ -50,7 +51,7 @@ server_router (HTTP_MESSAGE *request, HTTP_MESSAGE *response)
             http_message_set_body_fd(response, html_file, NULL, 228);
 
         } else {
-            strcpy(response->start_line.response.status_code, "405");
+            response->start_line.response.status_code = STATUS_METHOD_NOT_ALLOWED;
             strcpy(response->start_line.response.status_message, "Method Not Allowed");
 
             response->header_count = 4;
@@ -61,7 +62,7 @@ server_router (HTTP_MESSAGE *request, HTTP_MESSAGE *response)
         }
 
     } else {
-        strcpy(response->start_line.response.status_code, "404");
+        response->start_line.response.status_code = STATUS_NOT_FOUND;
         strcpy(response->start_line.response.status_message, "Not Found");
 
         response->header_count = 4;
@@ -103,7 +104,7 @@ main(void)
             HTTP_MESSAGE request = parse_http_message(client_fd, REQUEST);
 
             // Print out the request info for debug purposes
-            print_http_message(&request);
+            print_http_message(&request, REQUEST);
 
             // Put Request in Router
             server_router(&request, &response);

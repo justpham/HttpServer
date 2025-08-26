@@ -59,15 +59,29 @@ parse_start_line(char *line, HTTP_START_LINE *start_line, int http_message_type)
         return -3;
     }
 
-    if (http_message_type == REQUEST)
-        num_parsed = sscanf(buffer, "%9s %2047s %9s", start_line->request.method,
-                            start_line->request.request_target, start_line->request.protocol);
+    if (http_message_type == REQUEST) {
+        
+        char method_buffer[MAX_METHOD_LENGTH] = { 0 };
+        char protocol_buffer[MAX_PROTOCOL_LENGTH] = { 0 };
 
-    else if (http_message_type == RESPONSE)
-        num_parsed = sscanf(buffer, "%9s %3s %31[^\r\n]", start_line->response.protocol,
-                            start_line->response.status_code, start_line->response.status_message);
+        num_parsed = sscanf(buffer, "%9s %2047s %9s", method_buffer, start_line->request.request_target, protocol_buffer);
+        if (num_parsed == 3) {
+            set_http_method_from_string(method_buffer, &start_line->request.method);
+            set_http_protocol_from_string(protocol_buffer, &start_line->request.protocol);
+        }
+    } else if (http_message_type == RESPONSE) {
+        char protocol_buffer[MAX_PROTOCOL_LENGTH] = { 0 };
+        char status_code_buffer[MAX_STATUS_CODE_LENGTH] = { 0 };
 
-    else {
+        num_parsed = sscanf(buffer, "%9s %3s %2047[^\r\n]", protocol_buffer,
+                            status_code_buffer, start_line->response.status_message);
+
+        if (num_parsed == 3) {
+            set_http_protocol_from_string(protocol_buffer, &start_line->response.protocol);
+            set_http_status_code_from_string(status_code_buffer, &start_line->response.status_code);
+        }
+
+    } else {
         fprintf(stderr, "Unknown HTTP message type in parse_start_line()\n");
         return -4;
     }

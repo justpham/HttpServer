@@ -49,14 +49,14 @@ build_header(HTTP_MESSAGE *msg, int http_message_type, char *buf, int buf_size)
 
     // Check parameters of msg->start_line
     if (http_message_type == REQUEST) {
-        if (msg->start_line.request.method[0] == '\0'
+        if (msg->start_line.request.method >= HTTP_METHOD_UNKNOWN
             || msg->start_line.request.request_target[0] == '\0'
-            || msg->start_line.request.protocol[0] == '\0') {
+            || msg->start_line.request.protocol >= HTTP_PROTOCOL_UNKNOWN) {
             return -3;
         }
     } else if (http_message_type == RESPONSE) {
-        if (msg->start_line.response.protocol[0] == '\0'
-            || msg->start_line.response.status_code[0] == '\0'
+        if (msg->start_line.response.protocol >= HTTP_PROTOCOL_UNKNOWN
+            || msg->start_line.response.status_code == HTTP_STATUS_CODE_UNKNOWN
             || msg->start_line.response.status_message[0] == '\0') {
             return -3;
         }
@@ -64,13 +64,31 @@ build_header(HTTP_MESSAGE *msg, int http_message_type, char *buf, int buf_size)
         return -4; // Unknown HTTP message type
     }
 
-    snprintf(ptr, bytes_remaining, "%s %s %s\r\n",
-             http_message_type == REQUEST ? msg->start_line.request.method
-                                          : msg->start_line.response.protocol,
-             http_message_type == REQUEST ? msg->start_line.request.request_target
-                                          : msg->start_line.response.status_code,
-             http_message_type == REQUEST ? msg->start_line.request.protocol
-                                          : msg->start_line.response.status_message);
+    if (http_message_type == REQUEST) {
+
+        char method_buffer[MAX_METHOD_LENGTH] = { 0 };
+        char protocol_buffer[MAX_PROTOCOL_LENGTH] = { 0 };
+
+        get_value_from_http_method(msg->start_line.request.method, method_buffer, sizeof(method_buffer));
+        get_value_from_http_protocol(msg->start_line.request.protocol, protocol_buffer, sizeof(protocol_buffer));
+
+        snprintf(ptr, bytes_remaining, "%s %s %s\r\n",
+             method_buffer,
+             msg->start_line.request.request_target,
+             protocol_buffer);
+    } else {
+
+        char status_code_buffer[MAX_STATUS_CODE_LENGTH] = { 0 };
+        char protocol_buffer[MAX_PROTOCOL_LENGTH] = { 0 };
+
+        get_value_from_http_protocol(msg->start_line.response.protocol, protocol_buffer, sizeof(protocol_buffer));
+        get_value_from_http_status_code(msg->start_line.response.status_code, status_code_buffer, sizeof(status_code_buffer));
+
+        snprintf(ptr, bytes_remaining, "%s %s %s\r\n",
+             protocol_buffer,
+             status_code_buffer,
+             msg->start_line.response.status_message);
+    }
 
     bytes_remaining -= strlen(ptr);
     ptr += strlen(ptr);

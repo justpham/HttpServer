@@ -103,7 +103,7 @@ http_message_set_body_fd(HTTP_MESSAGE *msg, int fd, const char *path, int length
 }
 
 void
-print_http_message(const HTTP_MESSAGE *msg)
+print_http_message(const HTTP_MESSAGE *msg, int http_message_type)
 {
     if (!msg)
         return;
@@ -111,13 +111,28 @@ print_http_message(const HTTP_MESSAGE *msg)
     printf("---------------HTTP MESSAGE---------------------\n");
 
     // Print start line
-    if (msg->start_line.request.method[0] != '\0') {
-        printf("HTTP Method: %s\n", msg->start_line.request.method);
+    if (http_message_type == REQUEST) {
+
+        char method_buffer[MAX_METHOD_LENGTH] = { 0 };
+        char protocol_buffer[MAX_PROTOCOL_LENGTH] = { 0 };
+
+        get_value_from_http_method(msg->start_line.request.method, method_buffer, sizeof(method_buffer));
+        get_value_from_http_protocol(msg->start_line.request.protocol, protocol_buffer, sizeof(protocol_buffer));
+
+        printf("HTTP Method: %s\n", method_buffer);
         printf("Request Target: %s\n", msg->start_line.request.request_target);
-        printf("HTTP Version: %s\n", msg->start_line.request.protocol);
-    } else if (msg->start_line.response.protocol[0] != '\0') {
-        printf("HTTP Protocol: %s\n", msg->start_line.response.protocol);
-        printf("Status Code: %s\n", msg->start_line.response.status_code);
+        printf("HTTP Version: %s\n", protocol_buffer);
+
+    } else if (http_message_type == RESPONSE) {
+
+        char status_code_buffer[MAX_STATUS_CODE_LENGTH] = { 0 };
+        char protocol_buffer[MAX_PROTOCOL_LENGTH] = { 0 };
+
+        get_value_from_http_protocol(msg->start_line.response.protocol, protocol_buffer, sizeof(protocol_buffer));
+        get_value_from_http_status_code(msg->start_line.response.status_code, status_code_buffer, sizeof(status_code_buffer));
+
+        printf("HTTP Protocol: %s\n", protocol_buffer);
+        printf("Status Code: %s\n", status_code_buffer);
         printf("Status Message: %s\n", msg->start_line.response.status_message);
     } else {
         printf("Unknown HTTP Message Type\n");
@@ -158,4 +173,117 @@ print_http_message(const HTTP_MESSAGE *msg)
     }
 
     printf("\n\n------------------------------------------------\n");
+}
+
+int get_value_from_http_protocol(uint32_t version, char *buffer, int buffer_length)
+{
+    if (!buffer || buffer_length <= 0)
+        return -1;
+
+    switch (version) {
+    case HTTP_1_0:
+        return snprintf(buffer, buffer_length, "HTTP/1.0");
+    case HTTP_1_1:
+        return snprintf(buffer, buffer_length, "HTTP/1.1");
+    case HTTP_2_0:
+        return snprintf(buffer, buffer_length, "HTTP/2.0");
+    default:
+        return snprintf(buffer, buffer_length, "HTTP/Unknown");
+    }
+}
+
+int get_value_from_http_method(uint32_t method, char *buffer, int buffer_length)
+{
+    if (!buffer || buffer_length <= 0)
+        return -1;
+
+    switch (method) {
+    case HTTP_GET:
+        return snprintf(buffer, buffer_length, "GET");
+    case HTTP_POST:
+        return snprintf(buffer, buffer_length, "POST");
+    case HTTP_PUT:
+        return snprintf(buffer, buffer_length, "PUT");
+    case HTTP_DELETE:
+        return snprintf(buffer, buffer_length, "DELETE");
+    default:
+        return snprintf(buffer, buffer_length, "UNKNOWN");
+    }
+}
+
+int get_value_from_http_status_code(uint32_t status_code, char *buffer, int buffer_length)
+{
+    if (!buffer || buffer_length <= 0)
+        return -1;
+
+    switch (status_code) {
+    case STATUS_OK:
+        return snprintf(buffer, buffer_length, "200");
+    case STATUS_BAD_REQUEST:
+        return snprintf(buffer, buffer_length, "400");
+    case STATUS_NOT_FOUND:
+        return snprintf(buffer, buffer_length, "404");
+    case STATUS_METHOD_NOT_ALLOWED:
+        return snprintf(buffer, buffer_length, "405");
+    default:
+        return snprintf(buffer, buffer_length, "UNKNOWN");
+    }
+}
+
+int set_http_protocol_from_string(const char *str, uint32_t *version)
+{
+    if (!str || !version)
+        return -1;
+
+    if (strcmp(str, "HTTP/1.0") == 0) {
+        *version = HTTP_1_0;
+    } else if (strcmp(str, "HTTP/1.1") == 0) {
+        *version = HTTP_1_1;
+    } else if (strcmp(str, "HTTP/2.0") == 0) {
+        *version = HTTP_2_0;
+    } else {
+        *version = HTTP_PROTOCOL_UNKNOWN;
+    }
+
+    return 0;
+}
+
+int set_http_method_from_string(const char *str, uint32_t *method)
+{
+    if (!str || !method)
+        return -1;
+
+    if (strcmp(str, "GET") == 0) {
+        *method = HTTP_GET;
+    } else if (strcmp(str, "POST") == 0) {
+        *method = HTTP_POST;
+    } else if (strcmp(str, "PUT") == 0) {
+        *method = HTTP_PUT;
+    } else if (strcmp(str, "DELETE") == 0) {
+        *method = HTTP_DELETE;
+    } else {
+        *method = HTTP_METHOD_UNKNOWN;
+    }
+
+    return 0;
+}
+
+int set_http_status_code_from_string(const char *str, uint32_t *status_code)
+{
+    if (!str || !status_code)
+        return -1;
+
+    if (strcmp(str, "200") == 0) {
+        *status_code = STATUS_OK;
+    } else if (strcmp(str, "400") == 0) {
+        *status_code = STATUS_BAD_REQUEST;
+    } else if (strcmp(str, "404") == 0) {
+        *status_code = STATUS_NOT_FOUND;
+    } else if (strcmp(str, "405") == 0) {
+        *status_code = STATUS_METHOD_NOT_ALLOWED;
+    } else {
+        *status_code = -1; // Unknown status code
+    }
+
+    return 0;
 }

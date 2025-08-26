@@ -32,9 +32,9 @@ main(int argc, char *argv[])
 
     // Create HTTP Request
     HTTP_MESSAGE request = init_http_message();
-    strcpy(request.start_line.request.method, "GET");
+    request.start_line.request.method = HTTP_GET;
+    request.start_line.request.protocol = HTTP_1_1;
     strcpy(request.start_line.request.request_target, "/");
-    strcpy(request.start_line.request.protocol, "HTTP/1.1");
 
     // Set headers
     request.header_count = 4;
@@ -52,7 +52,7 @@ main(int argc, char *argv[])
 
     // Recieve the HTTP Response
     HTTP_MESSAGE response = parse_http_message(sockfd, RESPONSE);
-    print_http_message(&response);
+    print_http_message(&response, RESPONSE);
 
     free_http_message(&response);
     close(sockfd);
