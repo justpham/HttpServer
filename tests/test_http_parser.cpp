@@ -193,9 +193,13 @@ TEST(ParseStartLineTests, ParseStartLineValidGetRequest)
     int result = parse_start_line(line, &start_line, REQUEST);
     
     CHECK_EQUAL(0, result);
-    STRCMP_EQUAL("GET", start_line.request.method);
+    char method_str[64], protocol_str[64];
+    get_value_from_http_method(start_line.request.method, method_str, sizeof(method_str));
+    get_value_from_http_protocol(start_line.request.protocol, protocol_str, sizeof(protocol_str));
+    
+    STRCMP_EQUAL("GET", method_str);
     STRCMP_EQUAL("/index.html", start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", start_line.request.protocol);
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
 }
 
 TEST(ParseStartLineTests, ParseStartLineValidPostRequest)
@@ -204,9 +208,13 @@ TEST(ParseStartLineTests, ParseStartLineValidPostRequest)
     int result = parse_start_line(line, &start_line, REQUEST);
     
     CHECK_EQUAL(0, result);
-    STRCMP_EQUAL("POST", start_line.request.method);
+    char method_str[64], protocol_str[64];
+    get_value_from_http_method(start_line.request.method, method_str, sizeof(method_str));
+    get_value_from_http_protocol(start_line.request.protocol, protocol_str, sizeof(protocol_str));
+    
+    STRCMP_EQUAL("POST", method_str);
     STRCMP_EQUAL("/api/users", start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", start_line.request.protocol);
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
 }
 
 TEST(ParseStartLineTests, ParseStartLineWithQueryString)
@@ -215,9 +223,13 @@ TEST(ParseStartLineTests, ParseStartLineWithQueryString)
     int result = parse_start_line(line, &start_line, REQUEST);
     
     CHECK_EQUAL(0, result);
-    STRCMP_EQUAL("GET", start_line.request.method);
+    char method_str[64], protocol_str[64];
+    get_value_from_http_method(start_line.request.method, method_str, sizeof(method_str));
+    get_value_from_http_protocol(start_line.request.protocol, protocol_str, sizeof(protocol_str));
+    
+    STRCMP_EQUAL("GET", method_str);
     STRCMP_EQUAL("/search?q=test&page=1", start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", start_line.request.protocol);
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
 }
 
 TEST(ParseStartLineTests, ParseStartLineNullLine)
@@ -260,9 +272,13 @@ TEST(ParseStartLineTests, ParseStartLineWithExtraSpaces)
     int result = parse_start_line(line, &start_line, REQUEST);
     
     CHECK_EQUAL(0, result);
-    STRCMP_EQUAL("GET", start_line.request.method);
+    char method_str[64], protocol_str[64];
+    get_value_from_http_method(start_line.request.method, method_str, sizeof(method_str));
+    get_value_from_http_protocol(start_line.request.protocol, protocol_str, sizeof(protocol_str));
+    
+    STRCMP_EQUAL("GET", method_str);
     STRCMP_EQUAL("/index.html", start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", start_line.request.protocol);
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
 }
 
 // Response start line tests
@@ -272,8 +288,12 @@ TEST(ParseStartLineTests, ParseStartLineValidResponse)
     int result = parse_start_line(line, &start_line, RESPONSE);
 
     CHECK_EQUAL(0, result);
-    STRCMP_EQUAL("HTTP/1.1", start_line.response.protocol);
-    STRCMP_EQUAL("200", start_line.response.status_code);
+    char protocol_str[64], status_code_str[64];
+    get_value_from_http_protocol(start_line.response.protocol, protocol_str, sizeof(protocol_str));
+    get_value_from_http_status_code(start_line.response.status_code, status_code_str, sizeof(status_code_str));
+    
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
+    STRCMP_EQUAL("200", status_code_str);
     STRCMP_EQUAL("OK", start_line.response.status_message);
 }
 
@@ -283,8 +303,12 @@ TEST(ParseStartLineTests, ParseStartLineValidResponseWithMultiWordStatus)
     int result = parse_start_line(line, &start_line, RESPONSE);
 
     CHECK_EQUAL(0, result);
-    STRCMP_EQUAL("HTTP/1.1", start_line.response.protocol);
-    STRCMP_EQUAL("404", start_line.response.status_code);
+    char protocol_str[64], status_code_str[64];
+    get_value_from_http_protocol(start_line.response.protocol, protocol_str, sizeof(protocol_str));
+    get_value_from_http_status_code(start_line.response.status_code, status_code_str, sizeof(status_code_str));
+    
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
+    STRCMP_EQUAL("404", status_code_str);
     STRCMP_EQUAL("Not Found", start_line.response.status_message);
 }
 

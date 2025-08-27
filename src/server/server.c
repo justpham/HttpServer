@@ -23,7 +23,7 @@
 #include <unistd.h>
 
 int
-server_router (HTTP_MESSAGE *request, HTTP_MESSAGE *response)
+server_router(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
 {
 
     char *route = request->start_line.request.request_target;
@@ -39,48 +39,24 @@ server_router (HTTP_MESSAGE *request, HTTP_MESSAGE *response)
             response->start_line.response.status_code = STATUS_OK;
             strcpy(response->start_line.response.status_message, "OK");
 
-            response->header_count = 4;
-
-            response->headers[0] = (HTTP_HEADER){ "Server", "HttpServer" };
-            response->headers[1] = (HTTP_HEADER){ "Content-Type", "text/html; charset=UTF-8" };
-            response->headers[2] = (HTTP_HEADER){ "Content-Length", "228" };
-            response->headers[3] = (HTTP_HEADER){ "Connection", "close" };
-
-            int html_file = open("html/index.html", O_RDONLY);
-
-            http_message_set_body_fd(response, html_file, NULL, 228);
+            http_message_open_existing_file(response, "html/index.html", O_RDONLY);
 
         } else {
             response->start_line.response.status_code = STATUS_METHOD_NOT_ALLOWED;
             strcpy(response->start_line.response.status_message, "Method Not Allowed");
 
-            response->header_count = 4;
-            response->headers[0] = (HTTP_HEADER){ "Server", "HttpServer" };
-            response->headers[1] = (HTTP_HEADER){ "Content-Length", "228" };
-            response->headers[2] = (HTTP_HEADER){ "Allow", "GET" };
-            response->headers[3] = (HTTP_HEADER){ "Connection", "close" };
+            add_header(response, "Allow", "GET");
         }
 
     } else {
         response->start_line.response.status_code = STATUS_NOT_FOUND;
         strcpy(response->start_line.response.status_message, "Not Found");
 
-        response->header_count = 4;
-        response->headers[0] = (HTTP_HEADER){ "Server", "HttpServer" };
-        response->headers[1] = (HTTP_HEADER){ "Content-Type", "text/html; charset=UTF-8" };
-        response->headers[2] = (HTTP_HEADER){ "Content-Length", "240" };
-        response->headers[3] = (HTTP_HEADER){ "Connection", "close" };
-
-        int html_file = open("html/NotFound.html", O_RDONLY);
-
-        http_message_set_body_fd(response, html_file, NULL, 240);
-
+        http_message_open_existing_file(response, "html/NotFound.html", O_RDONLY);
     }
 
     return 0;
 }
-
-
 
 int
 main(void)
@@ -99,6 +75,10 @@ main(void)
             close(sockfd); // child doesn't need this
 
             HTTP_MESSAGE response = init_http_message();
+
+            // Default Headers
+            add_header(&response, "Server", "HttpServer");
+            add_header(&response, "Connection", "close");
 
             // Recieve HTTP Request
             HTTP_MESSAGE request = parse_http_message(client_fd, REQUEST);

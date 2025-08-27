@@ -18,6 +18,35 @@ get_header_value(const HTTP_HEADER *header_array, const int length, const char *
     return NULL;
 }
 
+int
+get_mime_type_from_path(const char *path, char *buffer, int buffer_length)
+{
+    if (!path || !buffer || buffer_length <= 0)
+        return -1;
+
+    const char *ext = strrchr(path, '.');
+    if (!ext)
+        return -1;
+
+    if (strcasecmp(ext, ".html") == 0) {
+        strncpy(buffer, "text/html", buffer_length);
+    } else if (strcasecmp(ext, ".txt") == 0) {
+        strncpy(buffer, "text/plain", buffer_length);
+    } else if (strcasecmp(ext, ".json") == 0) {
+        strncpy(buffer, "application/json", buffer_length);
+    } else if (strcasecmp(ext, ".xml") == 0) {
+        strncpy(buffer, "application/xml", buffer_length);
+    } else if (strcasecmp(ext, ".jpeg") == 0 || strcasecmp(ext, ".jpg") == 0) {
+        strncpy(buffer, "image/jpeg", buffer_length);
+    } else if (strcasecmp(ext, ".png") == 0) {
+        strncpy(buffer, "image/png", buffer_length);
+    } else {
+        strncpy(buffer, "application/octet-stream", buffer_length);
+    }
+
+    return 0;
+}
+
 /*
     Initializes an HTTP message
 
@@ -63,12 +92,130 @@ free_http_message(HTTP_MESSAGE *msg)
 }
 
 /*
+    Adds a header to the HTTP message
+
+    If a header already exists, modifies the value for that header
+*/
+int
+add_header(HTTP_MESSAGE *msg, const char *key, const char *value)
+{
+    if (!msg || !key || !value)
+        return -1;
+
+    if (msg->header_count >= MAX_HEADERS) {
+        fprintf(stderr, "Max headers reached\n");
+        return -2;
+    }
+
+    // Check for existing matching headers
+    for (int i = 0; i < msg->header_count; i++) {
+        if (strcasecmp(msg->headers[i].key, key) == 0) {
+            strncpy(msg->headers[i].value, value, MAX_HEADER_LENGTH - 1);
+            msg->headers[i].value[MAX_HEADER_LENGTH - 1] = '\0';
+            return 0;
+        }
+    }
+
+    // Add the new header
+    strncpy(msg->headers[msg->header_count].key, key, MAX_HEADER_LENGTH - 1);
+    msg->headers[msg->header_count].key[MAX_HEADER_LENGTH - 1] = '\0';
+    strncpy(msg->headers[msg->header_count].value, value, MAX_HEADER_LENGTH - 1);
+    msg->headers[msg->header_count].value[MAX_HEADER_LENGTH - 1] = '\0';
+    msg->header_count++;
+
+    return 0;
+}
+
+
+int
+get_file_length(int fd)
+{
+    if (fd == -1)
+        return -1;
+
+    struct stat st;
+    if (fstat(fd, &st) == -1) {
+        perror("Failed to get file status");
+        return -2;
+    }
+
+    return st.st_size;
+}
+
+/*
+    Opens an existing file for reading
+
+    Automatically opens a file, sets the body length, and adds header about the opened file
+*/
+int
+http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags)
+{
+    if (!msg)
+        return -1;
+
+    /* Guard against NULL path before calling strlen() */
+    if (path) {
+        size_t pathlen = strlen(path);
+        if (pathlen >= sizeof(msg->body_path)) {
+            fprintf(stderr, "Provided path is too long for body_path buffer\n");
+            return -2;
+        }
+    } else {
+        fprintf(stderr, "Provided path is NULL\n");
+        return -2;
+    }
+
+    int fd = open(path, oflags, 0644);
+    if (fd == -1) {
+        perror("Failed to open body file");
+        return -3;
+    }
+
+    int file_length = get_file_length(fd);
+    if (file_length == -1) {
+        return -4;
+    }
+
+    http_message_set_body_fd(msg, fd, path, file_length);
+
+    return 0;
+}
+
+/*
+    Opens a temporary file for the HTTP message body
+
+    Paths are always prepended by /tmp/
+*/
+int
+http_message_open_temp_file(HTTP_MESSAGE *msg, const char *path, int body_length)
+{
+    if (!msg || !path || body_length <= 0)
+        return -1;
+
+    char temppath[MAX_HTTP_BODY_FILE_PATH + 6] = { 0 };
+    snprintf(temppath, sizeof(temppath), "/tmp/%s", path);
+
+    // Create a temporary file
+    int fd = open(temppath, O_RDWR | O_CREAT | O_TRUNC, 0644);
+    if (fd == -1) {
+        perror("Failed to open temp file");
+        return -2;
+    }
+
+    unlink(temppath);
+
+    http_message_set_body_fd(msg, fd, temppath, body_length);
+
+    return 0;
+}
+
+/*
     Closes the existing fd if open and sets the new fd/path
 
     Assumes that the fd is currently open
 */
 int
-http_message_set_body_fd(HTTP_MESSAGE *msg, int fd, const char *path, int length)
+http_message_set_body_fd(HTTP_MESSAGE *msg, int fd, const char *path, int body_length)
 {
     if (!msg)
         return -1;
@@ -91,12 +238,68 @@ http_message_set_body_fd(HTTP_MESSAGE *msg, int fd, const char *path, int length
     memset(msg->body_path, 0, sizeof(msg->body_path));
 
     msg->body_fd = fd;
-    msg->body_length = length;
+    msg->body_length = body_length;
 
     if (path) {
         /* Copy into the fixed-size body_path buffer. Truncate if necessary. */
         strncpy(msg->body_path, path, sizeof(msg->body_path) - 1);
         msg->body_path[sizeof(msg->body_path) - 1] = '\0';
+    }
+
+    return 0;
+}
+
+int
+build_error_response(HTTP_MESSAGE *msg, int status_code, const char *status_message, const char *json_error_message)
+{
+    if (!msg || status_code < 100 || status_code > 599 || !status_message)
+        return -1;
+
+    // Clear the message structure
+    memset(msg, 0, sizeof(HTTP_MESSAGE));
+    *msg = init_http_message();
+
+    // Set the start line for a response
+    msg->start_line.response.protocol = HTTP_1_1;
+    msg->start_line.response.status_code = status_code;
+    strncpy(msg->start_line.response.status_message, status_message, sizeof(msg->start_line.response.status_message) - 1);
+
+    // If JSON error message is provided, create temp file and write content
+    if (json_error_message) {
+        int json_length = strlen(json_error_message);
+        
+        // Create a temp file for the JSON content
+        char temp_filename[64];
+        snprintf(temp_filename, sizeof(temp_filename), "error_%d.json", status_code);
+        
+        if (http_message_open_temp_file(msg, temp_filename, json_length) != 0) {
+            fprintf(stderr, "Failed to create temp file for JSON error message\n");
+            return -2;
+        }
+        
+        // Write JSON content to the temp file
+        ssize_t bytes_written = write(msg->body_fd, json_error_message, json_length);
+        if (bytes_written != json_length) {
+            fprintf(stderr, "Failed to write JSON content to temp file\n");
+            free_http_message(msg);
+            return -3;
+        }
+        
+        // Add Content-Type header for JSON
+        if (add_header(msg, "Content-Type", "application/json") != 0) {
+            fprintf(stderr, "Failed to add Content-Type header\n");
+            free_http_message(msg);
+            return -4;
+        }
+        
+        // Add Content-Length header
+        char content_length_str[32];
+        snprintf(content_length_str, sizeof(content_length_str), "%d", json_length);
+        if (add_header(msg, "Content-Length", content_length_str) != 0) {
+            fprintf(stderr, "Failed to add Content-Length header\n");
+            free_http_message(msg);
+            return -5;
+        }
     }
 
     return 0;
@@ -116,8 +319,10 @@ print_http_message(const HTTP_MESSAGE *msg, int http_message_type)
         char method_buffer[MAX_METHOD_LENGTH] = { 0 };
         char protocol_buffer[MAX_PROTOCOL_LENGTH] = { 0 };
 
-        get_value_from_http_method(msg->start_line.request.method, method_buffer, sizeof(method_buffer));
-        get_value_from_http_protocol(msg->start_line.request.protocol, protocol_buffer, sizeof(protocol_buffer));
+        get_value_from_http_method(msg->start_line.request.method, method_buffer,
+                                   sizeof(method_buffer));
+        get_value_from_http_protocol(msg->start_line.request.protocol, protocol_buffer,
+                                     sizeof(protocol_buffer));
 
         printf("HTTP Method: %s\n", method_buffer);
         printf("Request Target: %s\n", msg->start_line.request.request_target);
@@ -128,8 +333,10 @@ print_http_message(const HTTP_MESSAGE *msg, int http_message_type)
         char status_code_buffer[MAX_STATUS_CODE_LENGTH] = { 0 };
         char protocol_buffer[MAX_PROTOCOL_LENGTH] = { 0 };
 
-        get_value_from_http_protocol(msg->start_line.response.protocol, protocol_buffer, sizeof(protocol_buffer));
-        get_value_from_http_status_code(msg->start_line.response.status_code, status_code_buffer, sizeof(status_code_buffer));
+        get_value_from_http_protocol(msg->start_line.response.protocol, protocol_buffer,
+                                     sizeof(protocol_buffer));
+        get_value_from_http_status_code(msg->start_line.response.status_code, status_code_buffer,
+                                        sizeof(status_code_buffer));
 
         printf("HTTP Protocol: %s\n", protocol_buffer);
         printf("Status Code: %s\n", status_code_buffer);
@@ -175,7 +382,8 @@ print_http_message(const HTTP_MESSAGE *msg, int http_message_type)
     printf("\n\n------------------------------------------------\n");
 }
 
-int get_value_from_http_protocol(uint32_t version, char *buffer, int buffer_length)
+int
+get_value_from_http_protocol(uint32_t version, char *buffer, int buffer_length)
 {
     if (!buffer || buffer_length <= 0)
         return -1;
@@ -192,7 +400,8 @@ int get_value_from_http_protocol(uint32_t version, char *buffer, int buffer_leng
     }
 }
 
-int get_value_from_http_method(uint32_t method, char *buffer, int buffer_length)
+int
+get_value_from_http_method(uint32_t method, char *buffer, int buffer_length)
 {
     if (!buffer || buffer_length <= 0)
         return -1;
@@ -211,7 +420,8 @@ int get_value_from_http_method(uint32_t method, char *buffer, int buffer_length)
     }
 }
 
-int get_value_from_http_status_code(uint32_t status_code, char *buffer, int buffer_length)
+int
+get_value_from_http_status_code(uint32_t status_code, char *buffer, int buffer_length)
 {
     if (!buffer || buffer_length <= 0)
         return -1;
@@ -230,7 +440,8 @@ int get_value_from_http_status_code(uint32_t status_code, char *buffer, int buff
     }
 }
 
-int set_http_protocol_from_string(const char *str, uint32_t *version)
+int
+set_http_protocol_from_string(const char *str, uint32_t *version)
 {
     if (!str || !version)
         return -1;
@@ -248,7 +459,8 @@ int set_http_protocol_from_string(const char *str, uint32_t *version)
     return 0;
 }
 
-int set_http_method_from_string(const char *str, uint32_t *method)
+int
+set_http_method_from_string(const char *str, uint32_t *method)
 {
     if (!str || !method)
         return -1;
@@ -268,7 +480,8 @@ int set_http_method_from_string(const char *str, uint32_t *method)
     return 0;
 }
 
-int set_http_status_code_from_string(const char *str, uint32_t *status_code)
+int
+set_http_status_code_from_string(const char *str, uint32_t *status_code)
 {
     if (!str || !status_code)
         return -1;

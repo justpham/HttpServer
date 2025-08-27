@@ -24,7 +24,44 @@ build_and_send_headers(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
         return -1;
     }
 
-    char buf[MAX_HEADER_SIZE] = { 0 }; // Buffer to write to the socket
+    char buf[MAX_HEADERS_SIZE] = { 0 }; // Buffer to write to the socket
+
+    if (msg->body_fd != -1) {
+        // Add Content-Length header
+        char content_length_str[32];
+        int file_length = get_file_length(msg->body_fd);
+        char *path = msg->body_path;
+
+        snprintf(content_length_str, sizeof(content_length_str), "%d", file_length);
+        add_header(msg, "Content-Length", content_length_str);
+
+        // Add Content-Type header
+        char mime_type_buffer[MAX_HEADER_LENGTH] = { 0 };
+        if (get_mime_type_from_path(path, mime_type_buffer, sizeof(mime_type_buffer)) == 0) {
+            char content_type_header[MAX_HEADER_LENGTH] = { 0 };
+            if (strncmp(mime_type_buffer, "text/", 5) == 0 ||
+                strcmp(mime_type_buffer, "application/json") == 0 ||
+                strcmp(mime_type_buffer, "application/xml") == 0) {
+                // Manually construct the content type with charset to avoid truncation warning
+                size_t mime_len = strlen(mime_type_buffer);
+                if (mime_len + 15 < sizeof(content_type_header)) { // 15 = strlen("; charset=utf-8")
+                    strcpy(content_type_header, mime_type_buffer);
+                    strcat(content_type_header, "; charset=utf-8");
+                } else {
+                    // Fall back to just the MIME type if adding charset would truncate
+                    strncpy(content_type_header, mime_type_buffer, sizeof(content_type_header) - 1);
+                    content_type_header[sizeof(content_type_header) - 1] = '\0';
+                }
+            } else {
+                strncpy(content_type_header, mime_type_buffer, sizeof(content_type_header) - 1);
+                content_type_header[sizeof(content_type_header) - 1] = '\0';
+            }
+            add_header(msg, "Content-Type", content_type_header);
+        } else {
+            fprintf(stderr, "Failed to get MIME type\n");
+            return -5;
+        }
+    }
 
     if (build_header(msg, http_message_type, buf, sizeof(buf)) != 0) {
         return -2;
@@ -69,25 +106,25 @@ build_header(HTTP_MESSAGE *msg, int http_message_type, char *buf, int buf_size)
         char method_buffer[MAX_METHOD_LENGTH] = { 0 };
         char protocol_buffer[MAX_PROTOCOL_LENGTH] = { 0 };
 
-        get_value_from_http_method(msg->start_line.request.method, method_buffer, sizeof(method_buffer));
-        get_value_from_http_protocol(msg->start_line.request.protocol, protocol_buffer, sizeof(protocol_buffer));
+        get_value_from_http_method(msg->start_line.request.method, method_buffer,
+                                   sizeof(method_buffer));
+        get_value_from_http_protocol(msg->start_line.request.protocol, protocol_buffer,
+                                     sizeof(protocol_buffer));
 
-        snprintf(ptr, bytes_remaining, "%s %s %s\r\n",
-             method_buffer,
-             msg->start_line.request.request_target,
-             protocol_buffer);
+        snprintf(ptr, bytes_remaining, "%s %s %s\r\n", method_buffer,
+                 msg->start_line.request.request_target, protocol_buffer);
     } else {
 
         char status_code_buffer[MAX_STATUS_CODE_LENGTH] = { 0 };
         char protocol_buffer[MAX_PROTOCOL_LENGTH] = { 0 };
 
-        get_value_from_http_protocol(msg->start_line.response.protocol, protocol_buffer, sizeof(protocol_buffer));
-        get_value_from_http_status_code(msg->start_line.response.status_code, status_code_buffer, sizeof(status_code_buffer));
+        get_value_from_http_protocol(msg->start_line.response.protocol, protocol_buffer,
+                                     sizeof(protocol_buffer));
+        get_value_from_http_status_code(msg->start_line.response.status_code, status_code_buffer,
+                                        sizeof(status_code_buffer));
 
-        snprintf(ptr, bytes_remaining, "%s %s %s\r\n",
-             protocol_buffer,
-             status_code_buffer,
-             msg->start_line.response.status_message);
+        snprintf(ptr, bytes_remaining, "%s %s %s\r\n", protocol_buffer, status_code_buffer,
+                 msg->start_line.response.status_message);
     }
 
     bytes_remaining -= strlen(ptr);

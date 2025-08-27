@@ -12,7 +12,8 @@
     "editor.defaultFormatter": "ms-vscode.cpptools",
     "files.associations": {
         "*.c": "c",
-        "*.h": "c"
+        "*.h": "c",
+        "string_view": "c"
     },
     "cppcheck.cppcheckPath": "cppcheck",
     "cppcheck.enable": true,

@@ -3,12 +3,13 @@
 
 #include "macros.h"
 #include <fcntl.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 #include <unistd.h>
-#include <stdint.h>
 
 /***************************
  *
@@ -19,8 +20,8 @@
 #define MAX_TARGET_LENGTH 2 * KB // Common URL length limit
 #define MAX_VERSION_LENGTH 10    // "HTTP/1.1" + null terminator
 
-#define MAX_PROTOCOL_LENGTH 10       // "HTTP/1.1" + null terminator
-#define MAX_STATUS_CODE_LENGTH 4     // "200" + null terminator
+#define MAX_PROTOCOL_LENGTH 10                      // "HTTP/1.1" + null terminator
+#define MAX_STATUS_CODE_LENGTH 4                    // "200" + null terminator
 #define MAX_STATUS_MESSAGE_LENGTH MAX_TARGET_LENGTH // "OK" + null terminator
 
 #define MAX_LINE_LENGTH 2 * KB   // Buffer size for reading HTTP lines
@@ -30,7 +31,8 @@
 #define MAX_HTTP_BODY_FILE_PATH 4 * KB
 
 #define MAX_START_LINE_SIZE (MAX_METHOD_LENGTH + MAX_TARGET_LENGTH + MAX_VERSION_LENGTH) + 1
-#define MAX_HEADER_SIZE (MAX_HEADERS * MAX_HEADER_LENGTH) + MAX_START_LINE_SIZE
+
+#define MAX_HEADERS_SIZE (MAX_HEADERS * MAX_HEADER_LENGTH) + MAX_START_LINE_SIZE
 
 enum HTTP_MESSAGE_TYPE
 {
@@ -73,8 +75,8 @@ enum HTTP_PROTOCOL
 */
 typedef struct
 {
-    uint32_t protocol;      // HTTP version (e.g., HTTP/1.1)
-    uint32_t method;         // HTTP method (e.g., GET, POST)
+    uint32_t protocol;                      // HTTP version (e.g., HTTP/1.1)
+    uint32_t method;                        // HTTP method (e.g., GET, POST)
     char request_target[MAX_TARGET_LENGTH]; // Request target (e.g., /index.html)
 } HTTP_REQUEST_START_LINE; // TODO : I can probably use integers and enums here to save space
 
@@ -86,9 +88,9 @@ typedef struct
 */
 typedef struct
 {
-    uint32_t protocol;      // Protocol (e.g., HTTP/1.1)
-    uint32_t status_code;   // Status code (e.g., 200)
-    char status_message[MAX_STATUS_MESSAGE_LENGTH];  // Status message (e.g., OK)
+    uint32_t protocol;                              // Protocol (e.g., HTTP/1.1)
+    uint32_t status_code;                           // Status code (e.g., 200)
+    char status_message[MAX_STATUS_MESSAGE_LENGTH]; // Status message (e.g., OK)
 } HTTP_RESPONSE_START_LINE; // TODO : I can probably use integers and enums here to save space
 
 /*
@@ -126,7 +128,12 @@ typedef struct
 /* HTTP_MESSAGE struct helper functions */
 HTTP_MESSAGE init_http_message();
 void free_http_message(HTTP_MESSAGE *msg);
-int http_message_set_body_fd(HTTP_MESSAGE *msg, int fd, const char *path, int length);
+int get_file_length(int fd);
+int add_header(HTTP_MESSAGE *msg, const char *key, const char *value);
+int http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags);
+int http_message_open_temp_file(HTTP_MESSAGE *msg, const char *path, int body_length);
+int http_message_set_body_fd(HTTP_MESSAGE *msg, int fd, const char *path, int body_length);
+int build_error_response(HTTP_MESSAGE *msg, int status_code, const char *status_message, const char *json_error_message);
 void print_http_message(const HTTP_MESSAGE *msg, int http_message_type);
 
 /* Enum Functions */
@@ -139,3 +146,6 @@ int set_http_status_code_from_string(const char *str, uint32_t *status_code);
 
 /* HTTP_HEADER functions */
 const char *get_header_value(const HTTP_HEADER *header_array, const int length, const char *key);
+
+/* Other helper functions*/
+int get_mime_type_from_path(const char *path, char *buffer, int buffer_length);

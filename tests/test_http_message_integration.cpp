@@ -101,9 +101,13 @@ TEST(ParseHttpMessageIntegrationTests, ParseCompleteGetRequest)
     message = parse_http_message(server_socket, REQUEST);
     
     // Verify start line
-    STRCMP_EQUAL("GET", message.start_line.request.method);
+    char method_str[64], protocol_str[64];
+    get_value_from_http_method(message.start_line.request.method, method_str, sizeof(method_str));
+    get_value_from_http_protocol(message.start_line.request.protocol, protocol_str, sizeof(protocol_str));
+    
+    STRCMP_EQUAL("GET", method_str);
     STRCMP_EQUAL("/index.html", message.start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", message.start_line.request.protocol);
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
     
     // Verify headers
     CHECK_EQUAL(4, message.header_count);
@@ -145,9 +149,13 @@ TEST(ParseHttpMessageIntegrationTests, ParseCompletePostRequestWithBody)
     message = parse_http_message(server_socket, REQUEST);
     
     // Verify start line
-    STRCMP_EQUAL("POST", message.start_line.request.method);
+    char method_str[64], protocol_str[64];
+    get_value_from_http_method(message.start_line.request.method, method_str, sizeof(method_str));
+    get_value_from_http_protocol(message.start_line.request.protocol, protocol_str, sizeof(protocol_str));
+    
+    STRCMP_EQUAL("POST", method_str);
     STRCMP_EQUAL("/api/users", message.start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", message.start_line.request.protocol);
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
     
     // Verify headers
     CHECK_EQUAL(3, message.header_count);
@@ -203,9 +211,13 @@ TEST(ParseHttpMessageIntegrationTests, ParseFragmentedRequest)
     message = parse_http_message(server_socket, REQUEST);
     
     // Verify start line
-    STRCMP_EQUAL("GET", message.start_line.request.method);
+    char method_str[64], protocol_str[64];
+    get_value_from_http_method(message.start_line.request.method, method_str, sizeof(method_str));
+    get_value_from_http_protocol(message.start_line.request.protocol, protocol_str, sizeof(protocol_str));
+    
+    STRCMP_EQUAL("GET", method_str);
     STRCMP_EQUAL("/fragmented", message.start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", message.start_line.request.protocol);
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
     
     // Verify headers
     CHECK_EQUAL(3, message.header_count);
@@ -253,9 +265,13 @@ TEST(ParseHttpMessageIntegrationTests, ParseFragmentedRequestWithBody)
     message = parse_http_message(server_socket, REQUEST);
     
     // Verify start line
-    STRCMP_EQUAL("POST", message.start_line.request.method);
+    char method_str[64], protocol_str[64];
+    get_value_from_http_method(message.start_line.request.method, method_str, sizeof(method_str));
+    get_value_from_http_protocol(message.start_line.request.protocol, protocol_str, sizeof(protocol_str));
+    
+    STRCMP_EQUAL("POST", method_str);
     STRCMP_EQUAL("/api/data", message.start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", message.start_line.request.protocol);
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
     
     // Verify content length
     CHECK_EQUAL(33, message.body_length);
@@ -299,9 +315,13 @@ TEST(ParseHttpMessageIntegrationTests, ParseClientStyleFragmentedRequest)
     message = parse_http_message(server_socket, REQUEST);
     
     // Verify start line
-    STRCMP_EQUAL("GET", message.start_line.request.method);
+    char method_str[64], protocol_str[64];
+    get_value_from_http_method(message.start_line.request.method, method_str, sizeof(method_str));
+    get_value_from_http_protocol(message.start_line.request.protocol, protocol_str, sizeof(protocol_str));
+    
+    STRCMP_EQUAL("GET", method_str);
     STRCMP_EQUAL("/", message.start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", message.start_line.request.protocol);
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
     
     // Verify headers
     CHECK_EQUAL(5, message.header_count);
@@ -347,9 +367,13 @@ TEST(ParseHttpMessageIntegrationTests, ParseByteByByteFragments)
     message = parse_http_message(server_socket, REQUEST);
     
     // Verify parsing worked correctly despite fragmentation
-    STRCMP_EQUAL("GET", message.start_line.request.method);
+    char method_str[64], protocol_str[64];
+    get_value_from_http_method(message.start_line.request.method, method_str, sizeof(method_str));
+    get_value_from_http_protocol(message.start_line.request.protocol, protocol_str, sizeof(protocol_str));
+    
+    STRCMP_EQUAL("GET", method_str);
     STRCMP_EQUAL("/slow", message.start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", message.start_line.request.protocol);
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
     
     CHECK_EQUAL(2, message.header_count);
     
@@ -402,9 +426,13 @@ TEST(ParseHttpMessageIntegrationTests, ParseLargeFragmentedRequest)
     message = parse_http_message(server_socket, REQUEST);
     
     // Verify start line
-    STRCMP_EQUAL("POST", message.start_line.request.method);
+    char method_str[64], protocol_str[64];
+    get_value_from_http_method(message.start_line.request.method, method_str, sizeof(method_str));
+    get_value_from_http_protocol(message.start_line.request.protocol, protocol_str, sizeof(protocol_str));
+    
+    STRCMP_EQUAL("POST", method_str);
     STRCMP_EQUAL("/api/upload", message.start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", message.start_line.request.protocol);
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
     
     // Verify we got all headers
     CHECK_EQUAL(7, message.header_count);
@@ -454,9 +482,13 @@ TEST(ParseHttpMessageIntegrationTests, ParseInconvenientFragmentBoundaries)
     message = parse_http_message(server_socket, REQUEST);
     
     // Verify parsing worked despite awkward boundaries
-    STRCMP_EQUAL("GET", message.start_line.request.method);
+    char method_str[64], protocol_str[64];
+    get_value_from_http_method(message.start_line.request.method, method_str, sizeof(method_str));
+    get_value_from_http_protocol(message.start_line.request.protocol, protocol_str, sizeof(protocol_str));
+    
+    STRCMP_EQUAL("GET", method_str);
     STRCMP_EQUAL("/boundary-test", message.start_line.request.request_target);
-    STRCMP_EQUAL("HTTP/1.1", message.start_line.request.protocol);
+    STRCMP_EQUAL("HTTP/1.1", protocol_str);
     
     CHECK_EQUAL(3, message.header_count);
     

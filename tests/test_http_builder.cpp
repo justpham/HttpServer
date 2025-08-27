@@ -31,9 +31,9 @@ TEST_GROUP(BuildHeaderTests)
     
     void setup_request_message()
     {
-        strcpy(msg.start_line.request.method, "GET");
+        set_http_method_from_string("GET", &msg.start_line.request.method);
         strcpy(msg.start_line.request.request_target, "/index.html");
-        strcpy(msg.start_line.request.protocol, "HTTP/1.1");
+        set_http_protocol_from_string("HTTP/1.1", &msg.start_line.request.protocol);
         
         // Add some headers
         strcpy(msg.headers[0].key, "Host");
@@ -45,8 +45,8 @@ TEST_GROUP(BuildHeaderTests)
     
     void setup_response_message()
     {
-        strcpy(msg.start_line.response.protocol, "HTTP/1.1");
-        strcpy(msg.start_line.response.status_code, "200");
+        set_http_protocol_from_string("HTTP/1.1", &msg.start_line.response.protocol);
+        set_http_status_code_from_string("200", &msg.start_line.response.status_code);
         strcpy(msg.start_line.response.status_message, "OK");
         
         // Add some headers
@@ -131,7 +131,7 @@ TEST(BuildHeaderTests, NullMessage)
 TEST(BuildHeaderTests, EmptyRequestMethod)
 {
     setup_request_message();
-    msg.start_line.request.method[0] = '\0';
+    msg.start_line.request.method = HTTP_METHOD_UNKNOWN;
     
     int result = build_header(&msg, REQUEST, buffer, sizeof(buffer));
     CHECK_EQUAL(-3, result);
@@ -149,7 +149,7 @@ TEST(BuildHeaderTests, EmptyRequestTarget)
 TEST(BuildHeaderTests, EmptyRequestProtocol)
 {
     setup_request_message();
-    msg.start_line.request.protocol[0] = '\0';
+    msg.start_line.request.protocol = HTTP_PROTOCOL_UNKNOWN;
     
     int result = build_header(&msg, REQUEST, buffer, sizeof(buffer));
     CHECK_EQUAL(-3, result);
@@ -158,7 +158,7 @@ TEST(BuildHeaderTests, EmptyRequestProtocol)
 TEST(BuildHeaderTests, EmptyResponseProtocol)
 {
     setup_response_message();
-    msg.start_line.response.protocol[0] = '\0';
+    msg.start_line.response.protocol = HTTP_PROTOCOL_UNKNOWN;
     
     int result = build_header(&msg, RESPONSE, buffer, sizeof(buffer));
     CHECK_EQUAL(-3, result);
@@ -167,7 +167,7 @@ TEST(BuildHeaderTests, EmptyResponseProtocol)
 TEST(BuildHeaderTests, EmptyResponseStatusCode)
 {
     setup_response_message();
-    msg.start_line.response.status_code[0] = '\0';
+    msg.start_line.response.status_code = HTTP_STATUS_CODE_UNKNOWN; // Invalid status code
     
     int result = build_header(&msg, RESPONSE, buffer, sizeof(buffer));
     CHECK_EQUAL(-3, result);
@@ -242,9 +242,9 @@ TEST(BuildHeaderTests, MaxHeaders)
 
 TEST(BuildHeaderTests, PostRequestWithContentLength)
 {
-    strcpy(msg.start_line.request.method, "POST");
+    set_http_method_from_string("POST", &msg.start_line.request.method);
     strcpy(msg.start_line.request.request_target, "/api/users");
-    strcpy(msg.start_line.request.protocol, "HTTP/1.1");
+    set_http_protocol_from_string("HTTP/1.1", &msg.start_line.request.protocol);
     
     strcpy(msg.headers[0].key, "Content-Type");
     strcpy(msg.headers[0].value, "application/json");
@@ -262,8 +262,8 @@ TEST(BuildHeaderTests, PostRequestWithContentLength)
 
 TEST(BuildHeaderTests, ResponseWithMultiWordStatusMessage)
 {
-    strcpy(msg.start_line.response.protocol, "HTTP/1.1");
-    strcpy(msg.start_line.response.status_code, "404");
+    set_http_protocol_from_string("HTTP/1.1", &msg.start_line.response.protocol);
+    set_http_status_code_from_string("404", &msg.start_line.response.status_code);
     strcpy(msg.start_line.response.status_message, "Not Found");
     
     strcpy(msg.headers[0].key, "Content-Type");
@@ -319,9 +319,9 @@ TEST_GROUP(BuildAndSendHeadersTests)
     
     void setup_request_message()
     {
-        strcpy(msg.start_line.request.method, "GET");
+        set_http_method_from_string("GET", &msg.start_line.request.method);
         strcpy(msg.start_line.request.request_target, "/test");
-        strcpy(msg.start_line.request.protocol, "HTTP/1.1");
+        set_http_protocol_from_string("HTTP/1.1", &msg.start_line.request.protocol);
         
         strcpy(msg.headers[0].key, "Host");
         strcpy(msg.headers[0].value, "example.com");
@@ -330,8 +330,8 @@ TEST_GROUP(BuildAndSendHeadersTests)
     
     void setup_response_message()
     {
-        strcpy(msg.start_line.response.protocol, "HTTP/1.1");
-        strcpy(msg.start_line.response.status_code, "200");
+        set_http_protocol_from_string("HTTP/1.1", &msg.start_line.response.protocol);
+        set_http_status_code_from_string("200", &msg.start_line.response.status_code);
         strcpy(msg.start_line.response.status_message, "OK");
         
         strcpy(msg.headers[0].key, "Content-Type");
@@ -359,7 +359,7 @@ TEST(BuildAndSendHeadersTests, InvalidSocketFd)
 TEST(BuildAndSendHeadersTests, EmptyRequestMethod)
 {
     setup_request_message();
-    msg.start_line.request.method[0] = '\0'; // Make method empty
+    msg.start_line.request.method = HTTP_METHOD_UNKNOWN; // Make method empty
     
     int result = build_and_send_headers(&msg, mock_socket_fd, REQUEST);
     CHECK_EQUAL(-2, result); // Should fail in build_header step
@@ -368,7 +368,7 @@ TEST(BuildAndSendHeadersTests, EmptyRequestMethod)
 TEST(BuildAndSendHeadersTests, EmptyResponseStatusCode)
 {
     setup_response_message();
-    msg.start_line.response.status_code[0] = '\0'; // Make status code empty
+    msg.start_line.response.status_code = HTTP_STATUS_CODE_UNKNOWN; // Make status code empty
     
     int result = build_and_send_headers(&msg, mock_socket_fd, RESPONSE);
     CHECK_EQUAL(-2, result); // Should fail in build_header step
@@ -461,9 +461,9 @@ TEST(BuildAndSendHeadersTests, PartialSendStillSucceeds)
 
 TEST(BuildAndSendHeadersTests, RequestWithMultipleHeaders)
 {
-    strcpy(msg.start_line.request.method, "POST");
+    set_http_method_from_string("POST", &msg.start_line.request.method);
     strcpy(msg.start_line.request.request_target, "/api/data");
-    strcpy(msg.start_line.request.protocol, "HTTP/1.1");
+    set_http_protocol_from_string("HTTP/1.1", &msg.start_line.request.protocol);
     
     strcpy(msg.headers[0].key, "Host");
     strcpy(msg.headers[0].value, "api.example.com");
@@ -498,8 +498,8 @@ TEST(BuildAndSendHeadersTests, RequestWithMultipleHeaders)
 
 TEST(BuildAndSendHeadersTests, ResponseWithCustomHeaders)
 {
-    strcpy(msg.start_line.response.protocol, "HTTP/1.1");
-    strcpy(msg.start_line.response.status_code, "404");
+    set_http_protocol_from_string("HTTP/1.1", &msg.start_line.response.protocol);
+    set_http_status_code_from_string("404", &msg.start_line.response.status_code);
     strcpy(msg.start_line.response.status_message, "Not Found");
     
     strcpy(msg.headers[0].key, "Content-Type");

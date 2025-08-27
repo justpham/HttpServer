@@ -60,11 +60,12 @@ parse_start_line(char *line, HTTP_START_LINE *start_line, int http_message_type)
     }
 
     if (http_message_type == REQUEST) {
-        
+
         char method_buffer[MAX_METHOD_LENGTH] = { 0 };
         char protocol_buffer[MAX_PROTOCOL_LENGTH] = { 0 };
 
-        num_parsed = sscanf(buffer, "%9s %2047s %9s", method_buffer, start_line->request.request_target, protocol_buffer);
+        num_parsed = sscanf(buffer, "%9s %2047s %9s", method_buffer,
+                            start_line->request.request_target, protocol_buffer);
         if (num_parsed == 3) {
             set_http_method_from_string(method_buffer, &start_line->request.method);
             set_http_protocol_from_string(protocol_buffer, &start_line->request.protocol);
@@ -73,8 +74,8 @@ parse_start_line(char *line, HTTP_START_LINE *start_line, int http_message_type)
         char protocol_buffer[MAX_PROTOCOL_LENGTH] = { 0 };
         char status_code_buffer[MAX_STATUS_CODE_LENGTH] = { 0 };
 
-        num_parsed = sscanf(buffer, "%9s %3s %2047[^\r\n]", protocol_buffer,
-                            status_code_buffer, start_line->response.status_message);
+        num_parsed = sscanf(buffer, "%9s %3s %2047[^\r\n]", protocol_buffer, status_code_buffer,
+                            start_line->response.status_message);
 
         if (num_parsed == 3) {
             set_http_protocol_from_string(protocol_buffer, &start_line->response.protocol);
@@ -354,21 +355,14 @@ parse_http_message(int client_fd, int http_message_type)
         For every request we want to store the body in a temporary file
 
         Body may be too large to store in memory
-
-        TODO: For multiple simultaneous requests, use a unique temp file for each request
         */
-        int temp_file = open("/tmp/http_body", O_RDWR | O_CREAT | O_TRUNC, 0666);
-        if (temp_file < 0) {
-            perror("open");
-            return request;
-        }
 
-        unlink("/tmp/http_body"); // Ensure the file is deleted after closing
-
-        http_message_set_body_fd(&request, temp_file, "/tmp/http_body", request.body_length);
+        // TODO: For multiple simultaneous requests, use a unique temp file for each request
+        http_message_open_temp_file(&request, "http_body", request.body_length);
 
         // Parse the body
-        if ((return_code = parse_body_stream(client_fd, request.body_length, buffer, temp_file))
+        if ((return_code
+             = parse_body_stream(client_fd, request.body_length, buffer, request.body_fd))
             != 0) {
             fprintf(stderr, "Failed to parse body. Return code: %d\n", return_code);
         }
