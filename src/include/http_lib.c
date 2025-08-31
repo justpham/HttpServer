@@ -126,7 +126,6 @@ add_header(HTTP_MESSAGE *msg, const char *key, const char *value)
     return 0;
 }
 
-
 int
 get_file_length(int fd)
 {
@@ -143,7 +142,7 @@ get_file_length(int fd)
 }
 
 /*
-    Opens an existing file for reading
+    Opens an existing file for reading in the static folder
 
     Automatically opens a file, sets the body length, and adds header about the opened file
 */
@@ -165,7 +164,10 @@ http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags)
         return -2;
     }
 
-    int fd = open(path, oflags, 0644);
+    char temppath[MAX_HTTP_BODY_FILE_PATH + 6] = { 0 };
+    snprintf(temppath, sizeof(temppath), "static/%s", path);
+
+    int fd = open(temppath, oflags, 0644);
     if (fd == -1) {
         perror("Failed to open body file");
         return -3;
@@ -250,7 +252,8 @@ http_message_set_body_fd(HTTP_MESSAGE *msg, int fd, const char *path, int body_l
 }
 
 int
-build_error_response(HTTP_MESSAGE *msg, int status_code, const char *status_message, const char *json_error_message)
+build_error_response(HTTP_MESSAGE *msg, int status_code, const char *status_message,
+                     const char *json_error_message)
 {
     if (!msg || status_code < 100 || status_code > 599 || !status_message)
         return -1;
@@ -262,21 +265,22 @@ build_error_response(HTTP_MESSAGE *msg, int status_code, const char *status_mess
     // Set the start line for a response
     msg->start_line.response.protocol = HTTP_1_1;
     msg->start_line.response.status_code = status_code;
-    strncpy(msg->start_line.response.status_message, status_message, sizeof(msg->start_line.response.status_message) - 1);
+    strncpy(msg->start_line.response.status_message, status_message,
+            sizeof(msg->start_line.response.status_message) - 1);
 
     // If JSON error message is provided, create temp file and write content
     if (json_error_message) {
         int json_length = strlen(json_error_message);
-        
+
         // Create a temp file for the JSON content
         char temp_filename[64];
         snprintf(temp_filename, sizeof(temp_filename), "error_%d.json", status_code);
-        
+
         if (http_message_open_temp_file(msg, temp_filename, json_length) != 0) {
             fprintf(stderr, "Failed to create temp file for JSON error message\n");
             return -2;
         }
-        
+
         // Write JSON content to the temp file
         ssize_t bytes_written = write(msg->body_fd, json_error_message, json_length);
         if (bytes_written != json_length) {
@@ -284,14 +288,14 @@ build_error_response(HTTP_MESSAGE *msg, int status_code, const char *status_mess
             free_http_message(msg);
             return -3;
         }
-        
+
         // Add Content-Type header for JSON
         if (add_header(msg, "Content-Type", "application/json") != 0) {
             fprintf(stderr, "Failed to add Content-Type header\n");
             free_http_message(msg);
             return -4;
         }
-        
+
         // Add Content-Length header
         char content_length_str[32];
         snprintf(content_length_str, sizeof(content_length_str), "%d", json_length);
