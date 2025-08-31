@@ -147,8 +147,9 @@ get_file_length(int fd)
     Automatically opens a file, sets the body length, and adds header about the opened file
 */
 int
-http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags)
+http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags, bool is_abspath)
 {
+    
     if (!msg)
         return -1;
 
@@ -164,13 +165,25 @@ http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags)
         return -2;
     }
 
-    char temppath[MAX_HTTP_BODY_FILE_PATH + 6] = { 0 };
-    snprintf(temppath, sizeof(temppath), "static/%s", path);
+    int fd = -1;
 
-    int fd = open(temppath, oflags, 0644);
-    if (fd == -1) {
-        perror("Failed to open body file");
-        return -3;
+    printf("Opening file: %s (is_abspath=%d)\n", path, is_abspath);
+
+    if (!is_abspath) {
+        char temppath[MAX_HTTP_BODY_FILE_PATH + 6] = { 0 };
+        snprintf(temppath, sizeof(temppath), "static/%s", path);
+
+        fd = open(temppath, oflags, 0644);
+        if (fd == -1) {
+            perror("Failed to open body file");
+            return -3;
+        }
+    } else {
+        fd = open(path, oflags, 0644);
+        if (fd == -1) {
+            perror("Failed to open body file");
+            return -3;
+        }
     }
 
     int file_length = get_file_length(fd);

@@ -10,6 +10,7 @@
 #include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 /***************************
  *
@@ -45,6 +46,7 @@ enum HTTP_STATUS_CODE
 {
     STATUS_OK = 200,
     STATUS_BAD_REQUEST = 400,
+    STATUS_FORBIDDEN = 403,
     STATUS_NOT_FOUND = 404,
     STATUS_METHOD_NOT_ALLOWED = 405,
     HTTP_STATUS_CODE_UNKNOWN = 999
@@ -130,10 +132,11 @@ HTTP_MESSAGE init_http_message();
 void free_http_message(HTTP_MESSAGE *msg);
 int get_file_length(int fd);
 int add_header(HTTP_MESSAGE *msg, const char *key, const char *value);
-int http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags);
+int http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags, bool is_abspath);
 int http_message_open_temp_file(HTTP_MESSAGE *msg, const char *path, int body_length);
 int http_message_set_body_fd(HTTP_MESSAGE *msg, int fd, const char *path, int body_length);
-int build_error_response(HTTP_MESSAGE *msg, int status_code, const char *status_message, const char *json_error_message);
+int build_error_response(HTTP_MESSAGE *msg, int status_code, const char *status_message,
+                         const char *json_error_message);
 void print_http_message(const HTTP_MESSAGE *msg, int http_message_type);
 
 /* Enum Functions */
