@@ -41,14 +41,14 @@ echo_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
             return -1;
         }
 
-        printf("Reading bytes\n");
-
         print_http_message(request, REQUEST);
 
         if ((bytes_read = read(request->body_fd, file_contents, request->body_length)) == -1) {
             perror("Failed to read from temp file");
             close(request->body_fd);
             free(file_contents);
+            build_error_response(response, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error",
+                                 NULL);
             return -1;
         }
 
@@ -61,12 +61,13 @@ echo_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
             perror("Failed to write to temp file");
             close(response->body_fd);
             free(file_contents);
+            build_error_response(response, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error",
+                                 NULL);
             return -1;
         }
 
         response->start_line.response.status_code = STATUS_OK;
         strcpy(response->start_line.response.status_message, "OK");
-
         free(file_contents);
 
     } else {
@@ -84,9 +85,12 @@ echo_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
 int
 static_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
 {
-    printf("Static file request: %s\n", request->start_line.request.request_target);
-    if (!request || !response)
+    if (!request || !response) {
+        build_error_response(response, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
         return -1;
+    }
+
+    printf("Static file request: %s\n", request->start_line.request.request_target);
 
     // Get route
     char route[MAX_TARGET_LENGTH + 1] = { 0 }; // +1 for the leading '.'
@@ -96,7 +100,7 @@ static_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
         response->start_line.response.status_code = STATUS_NOT_FOUND;
         strcpy(response->start_line.response.status_message, "Not Found");
         http_message_open_existing_file(response, "html/NotFound.html", O_RDONLY, false);
-        return 0;
+        return -1;
     }
     snprintf(route, sizeof route, ".%s", request->start_line.request.request_target);
 
@@ -111,7 +115,7 @@ static_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
         response->start_line.response.status_code = STATUS_NOT_FOUND;
         strcpy(response->start_line.response.status_message, "Not Found");
         http_message_open_existing_file(response, "html/NotFound.html", O_RDONLY, false);
-        return 0;
+        return -1;
     }
 
     // Get the absolute path of the static directory
@@ -121,7 +125,7 @@ static_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
         response->start_line.response.status_code = STATUS_FORBIDDEN;
         strcpy(response->start_line.response.status_message, "Forbidden");
         http_message_open_existing_file(response, "html/Forbidden.html", O_RDONLY, false);
-        return 0;
+        return -1;
     }
 
     // Check that its a file rather than a directory
@@ -131,7 +135,7 @@ static_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
         response->start_line.response.status_code = STATUS_NOT_FOUND;
         strcpy(response->start_line.response.status_message, "Not Found");
         http_message_open_existing_file(response, "html/NotFound.html", O_RDONLY, false);
-        return 0;
+        return -1;
     }
     if (S_ISDIR(path_stat.st_mode)) {
         printf("Requested path is a directory: %s\n", resolved_path);
@@ -144,7 +148,7 @@ static_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
         response->start_line.response.status_code = STATUS_FORBIDDEN;
         strcpy(response->start_line.response.status_message, "Forbidden");
         http_message_open_existing_file(response, "html/Forbidden.html", O_RDONLY, false);
-        return 0;
+        return -1;
     }
 
     // Only accept GET requests
@@ -153,7 +157,7 @@ static_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
         response->start_line.response.status_code = STATUS_METHOD_NOT_ALLOWED;
         strcpy(response->start_line.response.status_message, "Method Not Allowed");
         add_header(response, "Allow", "GET");
-        return 0;
+        return -1;
     }
 
     // File is accessible
@@ -167,7 +171,12 @@ int
 server_router(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
 {
 
-    char *route = request->start_line.request.request_target;
+    if (!request || !response) {
+        fprintf(stderr, "Invalid parameters\n");
+        return -1;
+    }
+
+    const char *route = request->start_line.request.request_target;
     int method = request->start_line.request.method;
 
     response->start_line.response.protocol = request->start_line.request.protocol;
@@ -180,7 +189,6 @@ server_router(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
 
             response->start_line.response.status_code = STATUS_OK;
             strcpy(response->start_line.response.status_message, "OK");
-
             http_message_open_existing_file(response, "html/index.html", O_RDONLY, false);
 
         } else {
@@ -209,7 +217,6 @@ server_router(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
     } else {
         response->start_line.response.status_code = STATUS_NOT_FOUND;
         strcpy(response->start_line.response.status_message, "Not Found");
-
         http_message_open_existing_file(response, "html/NotFound.html", O_RDONLY, false);
     }
 
@@ -241,7 +248,15 @@ main(void)
             add_header(&response, "Connection", "close");
 
             // Recieve HTTP Request
-            HTTP_MESSAGE request = parse_http_message(client_fd, REQUEST);
+            HTTP_MESSAGE request = init_http_message();
+            if (parse_http_message(&request, client_fd, REQUEST) != 0) {
+                fprintf(stderr, "Failed to parse HTTP request\n");
+                // TODO: Move this error message inside parse_http_message to get more details about
+                // errors
+                build_error_response(&response, STATUS_BAD_REQUEST, "Bad Request", NULL);
+                close(client_fd);
+                exit(1);
+            }
 
             // Print out the request info for debug purposes
             print_http_message(&request, REQUEST);
@@ -251,7 +266,9 @@ main(void)
 
             print_http_message(&response, RESPONSE);
 
-            build_and_send_message(&response, client_fd, RESPONSE);
+            if (build_and_send_message(&response, client_fd, RESPONSE) != 0) {
+                fprintf(stderr, "Failed to send HTTP response to client successfully\n");
+            }
 
             // Clean everything up
             free_http_message(&request);

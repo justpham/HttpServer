@@ -51,7 +51,8 @@ main(int argc, char *argv[])
     build_and_send_message(&request, sockfd, REQUEST);
 
     // Recieve the HTTP Response
-    HTTP_MESSAGE response = parse_http_message(sockfd, RESPONSE);
+    HTTP_MESSAGE response = init_http_message();
+    parse_http_message(&response, sockfd, RESPONSE);
     print_http_message(&response, RESPONSE);
 
     free_http_message(&response);

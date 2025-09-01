@@ -126,7 +126,7 @@ parse_header(char *line, HTTP_HEADER *header)
     char temp_key[MAX_HEADER_LENGTH] = { 0 };
     char temp_value[MAX_HEADER_LENGTH] = { 0 };
 
-    int num_parsed = sscanf(buffer, "%8000[^:]: %8000[^\r\n]", temp_key, temp_value);
+    int num_parsed = sscanf(buffer, "%4095[^:]: %4095[^\r\n]", temp_key, temp_value);
 
     if (num_parsed == 2) {
         strncpy(header->key, temp_key, MAX_HEADER_LENGTH - 1);
@@ -139,48 +139,6 @@ parse_header(char *line, HTTP_HEADER *header)
     }
 
     return 0;
-}
-
-/*
-    Parses the HTTP body to output to a file descriptor
-
-    This function assumes that out_fd is valid
-*/
-int
-parse_body(const char *body_buffer, int content_length, int out_fd)
-{
-    if (!body_buffer || content_length < 0 || out_fd < 0) {
-        fprintf(stderr, "Invalid arguments to parse_body()\n");
-        return -1;
-    }
-
-    if (content_length == 0)
-        return 0;
-
-    const char *p = body_buffer;
-    int remaining = content_length;
-    const size_t CHUNK = 8192;
-
-    while (remaining > 0) {
-        size_t to_write = remaining > (int) CHUNK ? CHUNK : (size_t) remaining;
-        ssize_t written = write(out_fd, p, to_write);
-        if (written == -1) {
-            perror("write to fd failed");
-            return -2;
-        } else if (written == 0) {
-            /* Nothing written but no error: avoid infinite loop */
-            break;
-        }
-        p += written;
-        remaining -= (int) written;
-    }
-
-    if (fsync(out_fd) != 0) {
-        perror("fsync");
-        return -3;
-    }
-
-    return remaining == 0 ? 0 : -4;
 }
 
 /*
@@ -244,23 +202,20 @@ parse_body_stream(int in_fd, int content_length, char *buffer, int out_fd)
     return 0;
 }
 
-HTTP_MESSAGE
-parse_http_message(int client_fd, int http_message_type)
+int
+parse_http_message(HTTP_MESSAGE *message, int client_fd, int http_message_type)
 {
 
     // Recieve HTTP Request
     char buffer[8 * KB] = { 0 };
 
     char *recv_start = &buffer[0]; // Point at the start of the array
-    int recv_offset = 0;
-
-    ssize_t bytes_received;
+    unsigned int recv_offset = 0;
     int is_start_line = 1;
-    int return_code = 0;
     int end_of_header = 0;
-    int current_buffer_length = 0;
-
-    HTTP_MESSAGE request = init_http_message();
+    ssize_t bytes_received;
+    int return_code;
+    int current_buffer_length;
 
     // Parse the initial header section of the HTTP request
     while ((bytes_received = recv(client_fd, recv_start, sizeof(buffer) - recv_offset - 1, 0))
@@ -275,12 +230,7 @@ parse_http_message(int client_fd, int http_message_type)
 
         // TODO: Add a timeout system
 
-        if (bytes_received == -1) {
-            perror("recv failed");
-            break;
-        }
-
-        if (request.header_count >= MAX_HEADERS) {
+        if (message->header_count >= MAX_HEADERS) {
             fprintf(stderr, "Maximum header count exceeded\n");
             break;
         }
@@ -321,13 +271,15 @@ parse_http_message(int client_fd, int http_message_type)
 
             // Process the line (e.g., parse headers)
             if (is_start_line) {
-                if (parse_start_line(buffer, &request.start_line, http_message_type) < 0) {
+                if (parse_start_line(buffer, &message->start_line, http_message_type) < 0) {
                     fprintf(stderr, "Failed to parse start line: '%s'\n", buffer);
+                    return -1;
                 }
                 is_start_line = 0;
             } else {
-                if (parse_header(buffer, &request.headers[request.header_count++]) < 0) {
+                if (parse_header(buffer, &message->headers[message->header_count++]) < 0) {
                     fprintf(stderr, "Failed to parse header: '%s'\n", buffer);
+                    return -1;
                 }
             }
 
@@ -336,36 +288,40 @@ parse_http_message(int client_fd, int http_message_type)
             bytes_received -= current_buffer_length + 1;
         }
 
-        if (end_of_header) { // TODO: Refactor it so it's nicer
+        if (end_of_header) {
             break;
         }
     }
 
     const char *content_length
-        = get_header_value(request.headers, request.header_count, "Content-Length");
+        = get_header_value(message->headers, message->header_count, "Content-Length");
 
     if (content_length) {
-        request.body_length = atoi(content_length);
+        message->body_length = atoi(content_length);
     } else {
-        request.body_length = 0;
+        message->body_length = 0;
     }
 
-    if (request.body_length > 0) {
+    if (message->body_length > 0) {
         /*
         For every request we want to store the body in a temporary file
 
         Body may be too large to store in memory
         */
 
-        http_message_open_temp_file(&request, request.body_length);
+        if (http_message_open_temp_file(message, message->body_length) != 0) {
+            fprintf(stderr, "Failed to open temporary file\n");
+            return -1;
+        }
 
         // Parse the body
         if ((return_code
-             = parse_body_stream(client_fd, request.body_length, buffer, request.body_fd))
+             = parse_body_stream(client_fd, message->body_length, buffer, message->body_fd))
             != 0) {
             fprintf(stderr, "Failed to parse body. Return code: %d\n", return_code);
+            return -1;
         }
     }
 
-    return request;
+    return 0;
 }

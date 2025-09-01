@@ -108,19 +108,3 @@ accept_connection(int sockfd)
 
     return new_fd;
 }
-
-void
-handle_client_connection(int sockfd, int client_fd, const char *message)
-{
-    if (!fork()) {     // this is the child process
-        close(sockfd); // child doesn't need the listener
-
-        // Send the message to the client
-        if (send(client_fd, message, strlen(message), 0) == -1) {
-            perror("send");
-        }
-
-        close(client_fd);
-        exit(0);
-    }
-}

@@ -63,23 +63,3 @@ connect_to_host(const char *hostname)
 
     return sockfd;
 }
-
-/*
-    Recieves data from a given socket
-*/
-int
-receive_data(int sockfd, char *buf, int maxLength)
-{
-
-    int recieve_rate = RECV_RATE > (maxLength - 1) ? RECV_RATE : maxLength - 1;
-    int numbytes = 0;
-
-    if ((numbytes = recv(sockfd, buf, recieve_rate, 0)) == -1) {
-        perror("recv() in receive_data() failed\n");
-        return -1;
-    }
-
-    buf[numbytes] = '\0';
-
-    return 0;
-}

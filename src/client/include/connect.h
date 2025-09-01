@@ -20,5 +20,3 @@
 #define RECV_RATE 100 // max number of bytes we can get at once
 
 int connect_to_host(const char *hostname);
-
-int receive_data(int sockfd, char *buf, int maxLength);

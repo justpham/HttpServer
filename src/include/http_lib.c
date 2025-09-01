@@ -150,18 +150,22 @@ int
 http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags, bool is_abspath)
 {
 
-    if (!msg)
+    if (!msg) {
+        build_error_response(msg, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
         return -1;
+    }
 
     /* Guard against NULL path before calling strlen() */
     if (path) {
         size_t pathlen = strlen(path);
         if (pathlen >= sizeof(msg->body_path)) {
             fprintf(stderr, "Provided path is too long for body_path buffer\n");
+            build_error_response(msg, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
             return -2;
         }
     } else {
         fprintf(stderr, "Provided path is NULL\n");
+        build_error_response(msg, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
         return -2;
     }
 
@@ -176,18 +180,21 @@ http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags,
         fd = open(temppath, oflags, 0644);
         if (fd == -1) {
             perror("Failed to open body file");
+            build_error_response(msg, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
             return -3;
         }
     } else {
         fd = open(path, oflags, 0644);
         if (fd == -1) {
             perror("Failed to open body file");
+            build_error_response(msg, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
             return -3;
         }
     }
 
     int file_length = get_file_length(fd);
     if (file_length == -1) {
+        build_error_response(msg, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
         return -4;
     }
 
@@ -204,8 +211,10 @@ http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags,
 int
 http_message_open_temp_file(HTTP_MESSAGE *msg, int body_length)
 {
-    if (!msg || body_length <= 0)
+    if (!msg || body_length <= 0) {
+        build_error_response(msg, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
         return -1;
+    }
 
     char temppath[MAX_HTTP_BODY_FILE_PATH] = { 0 };
 
@@ -218,6 +227,7 @@ http_message_open_temp_file(HTTP_MESSAGE *msg, int body_length)
     int fd = open(temppath, O_RDWR | O_CREAT | O_TRUNC, 0644);
     if (fd == -1) {
         perror("Failed to open temp file");
+        build_error_response(msg, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
         return -2;
     }
 
@@ -238,14 +248,17 @@ http_message_open_temp_file(HTTP_MESSAGE *msg, int body_length)
 int
 http_message_set_body_fd(HTTP_MESSAGE *msg, int fd, const char *path, int body_length)
 {
-    if (!msg)
+    if (!msg) {
+        build_error_response(msg, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
         return -1;
+    }
 
     /* Guard against NULL path before calling strlen() */
     if (path) {
         size_t pathlen = strlen(path);
         if (pathlen >= sizeof(msg->body_path)) {
             fprintf(stderr, "Provided path is too long for body_path buffer\n");
+            build_error_response(msg, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
             return -2;
         }
     }
@@ -517,10 +530,16 @@ set_http_status_code_from_string(const char *str, uint32_t *status_code)
         *status_code = STATUS_OK;
     } else if (strcmp(str, "400") == 0) {
         *status_code = STATUS_BAD_REQUEST;
+    } else if (strcmp(str, "403") == 0) {
+        *status_code = STATUS_FORBIDDEN;
     } else if (strcmp(str, "404") == 0) {
         *status_code = STATUS_NOT_FOUND;
     } else if (strcmp(str, "405") == 0) {
         *status_code = STATUS_METHOD_NOT_ALLOWED;
+    } else if (strcmp(str, "415") == 0) {
+        *status_code = STATUS_UNSUPPORTED_MEDIA_TYPE;
+    } else if (strcmp(str, "500") == 0) {
+        *status_code = STATUS_INTERNAL_SERVER_ERROR;
     } else {
         *status_code = -1; // Unknown status code
     }

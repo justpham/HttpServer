@@ -26,5 +26,3 @@ void sigchld_handler(int s);
 int server_setup(void);
 
 int accept_connection(int sockfd);
-
-void handle_client_connection(int sockfd, int client_fd, const char *message);

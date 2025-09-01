@@ -21,6 +21,7 @@ build_and_send_headers(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
 {
 
     if (!msg || sock_fd == -1) {
+        fprintf(stderr, "Invalid parameters\n");
         return -1;
     }
 
@@ -30,7 +31,13 @@ build_and_send_headers(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
         // Add Content-Length header
         char content_length_str[32];
         int file_length = get_file_length(msg->body_fd);
-        char *path = msg->body_path;
+
+        if (file_length < 0) {
+            fprintf(stderr, "Failed to get file length\n");
+            return -6;
+        }
+
+        const char *path = msg->body_path;
 
         snprintf(content_length_str, sizeof(content_length_str), "%d", file_length);
         add_header(msg, "Content-Length", content_length_str);
@@ -64,10 +71,12 @@ build_and_send_headers(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
     }
 
     if (build_header(msg, http_message_type, buf, sizeof(buf)) != 0) {
+        fprintf(stderr, "Failed to build header\n");
         return -2;
     }
 
     if (send(sock_fd, buf, strlen(buf), 0) == -1) {
+        fprintf(stderr, "Failed to send headers\n");
         return -3;
     }
 
@@ -81,6 +90,7 @@ build_header(HTTP_MESSAGE *msg, int http_message_type, char *buf, int buf_size)
     int bytes_remaining = buf_size;
 
     if (!msg) {
+        fprintf(stderr, "Invalid HTTP message\n");
         return -1;
     }
 
@@ -89,15 +99,18 @@ build_header(HTTP_MESSAGE *msg, int http_message_type, char *buf, int buf_size)
         if (msg->start_line.request.method >= HTTP_METHOD_UNKNOWN
             || msg->start_line.request.request_target[0] == '\0'
             || msg->start_line.request.protocol >= HTTP_PROTOCOL_UNKNOWN) {
+            fprintf(stderr, "Invalid HTTP request start line\n");
             return -3;
         }
     } else if (http_message_type == RESPONSE) {
         if (msg->start_line.response.protocol >= HTTP_PROTOCOL_UNKNOWN
             || msg->start_line.response.status_code == HTTP_STATUS_CODE_UNKNOWN
             || msg->start_line.response.status_message[0] == '\0') {
+            fprintf(stderr, "Invalid HTTP response start line\n");
             return -3;
         }
     } else {
+        fprintf(stderr, "Unknown HTTP message type\n");
         return -4; // Unknown HTTP message type
     }
 
@@ -133,6 +146,7 @@ build_header(HTTP_MESSAGE *msg, int http_message_type, char *buf, int buf_size)
     for (int i = 0; i < msg->header_count; i++) {
 
         if (bytes_remaining <= 0) {
+            fprintf(stderr, "Not enough space for header\n");
             return -5; // Buffer overflow
         }
 
@@ -143,9 +157,8 @@ build_header(HTTP_MESSAGE *msg, int http_message_type, char *buf, int buf_size)
 
     if (bytes_remaining >= 3) {
         snprintf(ptr, bytes_remaining, "\r\n");
-        bytes_remaining -= strlen(ptr);
-        ptr += strlen(ptr);
     } else {
+        fprintf(stderr, "Not enough space for trailing CRLF\n");
         return -6; // Not enough space for trailing CRLF
     }
 
@@ -156,7 +169,10 @@ int
 build_and_send_message(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
 {
     // Send headers
-    build_and_send_headers(msg, sock_fd, http_message_type);
+    if (build_and_send_headers(msg, sock_fd, http_message_type) != 0) {
+        fprintf(stderr, "Failed to send headers\n");
+        return -1;
+    }
 
     // No body to send
     if (msg->body_length == 0) {
@@ -168,6 +184,7 @@ build_and_send_message(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
 
     // Check if msg->body_fd is valid
     if (msg->body_fd == -1) {
+        fprintf(stderr, "Invalid body file descriptor\n");
         return -1;
     }
 
