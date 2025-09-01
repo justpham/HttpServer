@@ -98,7 +98,7 @@ TEST(ParseHttpMessageIntegrationTests, ParseCompleteGetRequest)
     shutdown(client_socket, SHUT_WR);
     
     // Parse the message
-    message = parse_http_message(server_socket, REQUEST);
+    parse_http_message(&message, server_socket, REQUEST);
     
     // Verify start line
     char method_str[64], protocol_str[64];
@@ -146,7 +146,7 @@ TEST(ParseHttpMessageIntegrationTests, ParseCompletePostRequestWithBody)
     shutdown(client_socket, SHUT_WR);
     
     // Parse the message
-    message = parse_http_message(server_socket, REQUEST);
+    parse_http_message(&message, server_socket, REQUEST);
     
     // Verify start line
     char method_str[64], protocol_str[64];
@@ -208,7 +208,7 @@ TEST(ParseHttpMessageIntegrationTests, ParseFragmentedRequest)
     shutdown(client_socket, SHUT_WR);
     
     // Parse the message
-    message = parse_http_message(server_socket, REQUEST);
+    parse_http_message(&message, server_socket, REQUEST);
     
     // Verify start line
     char method_str[64], protocol_str[64];
@@ -262,7 +262,7 @@ TEST(ParseHttpMessageIntegrationTests, ParseFragmentedRequestWithBody)
     shutdown(client_socket, SHUT_WR);
     
     // Parse the message
-    message = parse_http_message(server_socket, REQUEST);
+    parse_http_message(&message, server_socket, REQUEST);
     
     // Verify start line
     char method_str[64], protocol_str[64];
@@ -312,7 +312,7 @@ TEST(ParseHttpMessageIntegrationTests, ParseClientStyleFragmentedRequest)
     shutdown(client_socket, SHUT_WR);
     
     // Parse the message
-    message = parse_http_message(server_socket, REQUEST);
+    parse_http_message(&message, server_socket, REQUEST);
     
     // Verify start line
     char method_str[64], protocol_str[64];
@@ -364,7 +364,7 @@ TEST(ParseHttpMessageIntegrationTests, ParseByteByByteFragments)
     shutdown(client_socket, SHUT_WR);
     
     // Parse the message
-    message = parse_http_message(server_socket, REQUEST);
+    parse_http_message(&message, server_socket, REQUEST);
     
     // Verify parsing worked correctly despite fragmentation
     char method_str[64], protocol_str[64];
@@ -423,7 +423,7 @@ TEST(ParseHttpMessageIntegrationTests, ParseLargeFragmentedRequest)
     shutdown(client_socket, SHUT_WR);
     
     // Parse the message
-    message = parse_http_message(server_socket, REQUEST);
+    parse_http_message(&message, server_socket, REQUEST);
     
     // Verify start line
     char method_str[64], protocol_str[64];
@@ -479,7 +479,7 @@ TEST(ParseHttpMessageIntegrationTests, ParseInconvenientFragmentBoundaries)
     shutdown(client_socket, SHUT_WR);
     
     // Parse the message
-    message = parse_http_message(server_socket, REQUEST);
+    parse_http_message(&message, server_socket, REQUEST);
     
     // Verify parsing worked despite awkward boundaries
     char method_str[64], protocol_str[64];
