@@ -39,9 +39,9 @@ build_and_send_headers(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
         char mime_type_buffer[MAX_HEADER_LENGTH] = { 0 };
         if (get_mime_type_from_path(path, mime_type_buffer, sizeof(mime_type_buffer)) == 0) {
             char content_type_header[MAX_HEADER_LENGTH] = { 0 };
-            if (strncmp(mime_type_buffer, "text/", 5) == 0 ||
-                strcmp(mime_type_buffer, "application/json") == 0 ||
-                strcmp(mime_type_buffer, "application/xml") == 0) {
+            if (strncmp(mime_type_buffer, "text/", 5) == 0
+                || strcmp(mime_type_buffer, "application/json") == 0
+                || strcmp(mime_type_buffer, "application/xml") == 0) {
                 // Manually construct the content type with charset to avoid truncation warning
                 size_t mime_len = strlen(mime_type_buffer);
                 if (mime_len + 15 < sizeof(content_type_header)) { // 15 = strlen("; charset=utf-8")

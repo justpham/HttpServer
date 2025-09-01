@@ -21,7 +21,7 @@ CXXFLAGS += -include $(CPPUTEST_HOME)/include/CppUTest/MemoryLeakDetectorNewMacr
 LD_LIBRARIES = -L$(CPPUTEST_HOME)/lib/aarch64-linux-gnu -lCppUTest -lCppUTestExt
 
 # Source Files
-COMMON_SOURCES = src$(SLASH)include$(SLASH)ip_helper.c src$(SLASH)include$(SLASH)cJSON.c src$(SLASH)include$(SLASH)http_parser.c src$(SLASH)include$(SLASH)http_lib.c src$(SLASH)include$(SLASH)http_builder.c
+COMMON_SOURCES = src$(SLASH)include$(SLASH)ip_helper.c src$(SLASH)include$(SLASH)cJSON.c src$(SLASH)include$(SLASH)http_parser.c src$(SLASH)include$(SLASH)http_lib.c src$(SLASH)include$(SLASH)http_builder.c src$(SLASH)include$(SLASH)random.c
 CLIENT_SOURCES = src$(SLASH)client$(SLASH)include$(SLASH)connect.c $(COMMON_SOURCES)
 SERVER_SOURCES = src$(SLASH)server$(SLASH)include$(SLASH)connect.c $(COMMON_SOURCES)
 

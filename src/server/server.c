@@ -22,14 +22,74 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-int static_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response) 
+int
+echo_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
+{
+
+    // Read the request body
+    const char *content_type
+        = get_header_value(request->headers, MAX_HEADER_LENGTH, "Content-Type");
+
+    if (strcmp("text/plain", content_type) == 0) {
+
+        ssize_t bytes_read = 0;
+
+        char *file_contents = malloc(request->body_length + 1);
+
+        if (!file_contents) {
+            perror("Failed to allocate memory");
+            return -1;
+        }
+
+        printf("Reading bytes\n");
+
+        print_http_message(request, REQUEST);
+
+        if ((bytes_read = read(request->body_fd, file_contents, request->body_length)) == -1) {
+            perror("Failed to read from temp file");
+            close(request->body_fd);
+            free(file_contents);
+            return -1;
+        }
+
+        // Pass it to the response
+        add_header(response, "Content-Type", content_type);
+
+        http_message_open_temp_file(response, bytes_read);
+
+        if (write(response->body_fd, file_contents, bytes_read) == -1) {
+            perror("Failed to write to temp file");
+            close(response->body_fd);
+            free(file_contents);
+            return -1;
+        }
+
+        response->start_line.response.status_code = STATUS_OK;
+        strcpy(response->start_line.response.status_message, "OK");
+
+        free(file_contents);
+
+    } else {
+        // Unsupported media type
+        response->start_line.response.status_code = STATUS_UNSUPPORTED_MEDIA_TYPE;
+        strcpy(response->start_line.response.status_message, "Unsupported Media Type");
+        http_message_open_existing_file(response, "html/UnsupportedMediaType.html", O_RDONLY,
+                                        false);
+        return -1;
+    }
+
+    return 0;
+}
+
+int
+static_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
 {
     printf("Static file request: %s\n", request->start_line.request.request_target);
     if (!request || !response)
         return -1;
 
     // Get route
-    char route[MAX_TARGET_LENGTH + 1] = {0}; // +1 for the leading '.'
+    char route[MAX_TARGET_LENGTH + 1] = { 0 }; // +1 for the leading '.'
     size_t target_len = strlen(request->start_line.request.request_target);
     if (target_len >= MAX_TARGET_LENGTH) {
         printf("Request target too long: %s\n", request->start_line.request.request_target);
@@ -39,7 +99,7 @@ int static_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
         return 0;
     }
     snprintf(route, sizeof route, ".%s", request->start_line.request.request_target);
-    
+
     int method = request->start_line.request.method;
 
     response->start_line.response.protocol = request->start_line.request.protocol;
@@ -121,12 +181,23 @@ server_router(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
             response->start_line.response.status_code = STATUS_OK;
             strcpy(response->start_line.response.status_message, "OK");
 
-            http_message_open_existing_file(response, "html/index.html", O_RDONLY, true);
+            http_message_open_existing_file(response, "html/index.html", O_RDONLY, false);
 
         } else {
             response->start_line.response.status_code = STATUS_METHOD_NOT_ALLOWED;
             strcpy(response->start_line.response.status_message, "Method Not Allowed");
             add_header(response, "Allow", "GET");
+        }
+
+    } else if (strcmp(route, "/echo") == 0) {
+
+        if (method == HTTP_POST) {
+            echo_handler(request, response);
+
+        } else {
+            response->start_line.response.status_code = STATUS_METHOD_NOT_ALLOWED;
+            strcpy(response->start_line.response.status_message, "Method Not Allowed");
+            add_header(response, "Allow", "POST");
         }
 
     } else if (strncmp(route, "/static", 7) == 0) {
@@ -161,6 +232,8 @@ main(void)
         if (!fork()) {
             close(sockfd); // child doesn't need this
 
+            srand((unsigned int) time(NULL));
+
             HTTP_MESSAGE response = init_http_message();
 
             // Default Headers
@@ -175,6 +248,8 @@ main(void)
 
             // Put Request in Router
             server_router(&request, &response);
+
+            print_http_message(&response, RESPONSE);
 
             build_and_send_message(&response, client_fd, RESPONSE);
 

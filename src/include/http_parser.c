@@ -357,8 +357,7 @@ parse_http_message(int client_fd, int http_message_type)
         Body may be too large to store in memory
         */
 
-        // TODO: For multiple simultaneous requests, use a unique temp file for each request
-        http_message_open_temp_file(&request, "http_body", request.body_length);
+        http_message_open_temp_file(&request, request.body_length);
 
         // Parse the body
         if ((return_code

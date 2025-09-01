@@ -5,12 +5,12 @@
     Gets the value of a header by key (case-insensitive)
 */
 const char *
-get_header_value(const HTTP_HEADER *header_array, const int length, const char *key)
+get_header_value(const HTTP_HEADER *header_array, const int header_length, const char *key)
 {
     if (!header_array || !key)
         return NULL;
 
-    for (int i = 0; i < length; i++) {
+    for (int i = 0; i < header_length; i++) {
         if (strcasecmp(header_array[i].key, key) == 0) {
             return header_array[i].value;
         }
@@ -149,7 +149,7 @@ get_file_length(int fd)
 int
 http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags, bool is_abspath)
 {
-    
+
     if (!msg)
         return -1;
 
@@ -202,13 +202,17 @@ http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags,
     Paths are always prepended by /tmp/
 */
 int
-http_message_open_temp_file(HTTP_MESSAGE *msg, const char *path, int body_length)
+http_message_open_temp_file(HTTP_MESSAGE *msg, int body_length)
 {
-    if (!msg || !path || body_length <= 0)
+    if (!msg || body_length <= 0)
         return -1;
 
-    char temppath[MAX_HTTP_BODY_FILE_PATH + 6] = { 0 };
-    snprintf(temppath, sizeof(temppath), "/tmp/%s", path);
+    char temppath[MAX_HTTP_BODY_FILE_PATH] = { 0 };
+
+    char randpath[128] = { 0 };
+
+    random_string(randpath, sizeof(randpath) - 1);
+    snprintf(temppath, sizeof(temppath), "/tmp/%s.txt", randpath);
 
     // Create a temporary file
     int fd = open(temppath, O_RDWR | O_CREAT | O_TRUNC, 0644);
@@ -216,6 +220,8 @@ http_message_open_temp_file(HTTP_MESSAGE *msg, const char *path, int body_length
         perror("Failed to open temp file");
         return -2;
     }
+
+    printf("Temporary file created: %s\n", temppath);
 
     unlink(temppath);
 
@@ -285,11 +291,7 @@ build_error_response(HTTP_MESSAGE *msg, int status_code, const char *status_mess
     if (json_error_message) {
         int json_length = strlen(json_error_message);
 
-        // Create a temp file for the JSON content
-        char temp_filename[64];
-        snprintf(temp_filename, sizeof(temp_filename), "error_%d.json", status_code);
-
-        if (http_message_open_temp_file(msg, temp_filename, json_length) != 0) {
+        if (http_message_open_temp_file(msg, json_length) != 0) {
             fprintf(stderr, "Failed to create temp file for JSON error message\n");
             return -2;
         }
@@ -391,6 +393,12 @@ print_http_message(const HTTP_MESSAGE *msg, int http_message_type)
                     perror("read body");
                 }
             }
+
+            // Rewind file
+            if (lseek(msg->body_fd, 0, SEEK_SET) == -1) {
+                perror("lseek");
+            }
+
         } else {
             printf("(no body fd available)");
         }
@@ -452,8 +460,10 @@ get_value_from_http_status_code(uint32_t status_code, char *buffer, int buffer_l
         return snprintf(buffer, buffer_length, "404");
     case STATUS_METHOD_NOT_ALLOWED:
         return snprintf(buffer, buffer_length, "405");
+    case STATUS_UNSUPPORTED_MEDIA_TYPE:
+        return snprintf(buffer, buffer_length, "415");
     default:
-        return snprintf(buffer, buffer_length, "UNKNOWN");
+        return snprintf(buffer, buffer_length, "???");
     }
 }
 

@@ -2,7 +2,9 @@
 #pragma once
 
 #include "macros.h"
+#include "random.h"
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,7 +12,6 @@
 #include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <stdbool.h>
 
 /***************************
  *
@@ -49,6 +50,7 @@ enum HTTP_STATUS_CODE
     STATUS_FORBIDDEN = 403,
     STATUS_NOT_FOUND = 404,
     STATUS_METHOD_NOT_ALLOWED = 405,
+    STATUS_UNSUPPORTED_MEDIA_TYPE = 415,
     HTTP_STATUS_CODE_UNKNOWN = 999
 };
 
@@ -132,8 +134,9 @@ HTTP_MESSAGE init_http_message();
 void free_http_message(HTTP_MESSAGE *msg);
 int get_file_length(int fd);
 int add_header(HTTP_MESSAGE *msg, const char *key, const char *value);
-int http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags, bool is_abspath);
-int http_message_open_temp_file(HTTP_MESSAGE *msg, const char *path, int body_length);
+int http_message_open_existing_file(HTTP_MESSAGE *msg, const char *path, int oflags,
+                                    bool is_abspath);
+int http_message_open_temp_file(HTTP_MESSAGE *msg, int body_length);
 int http_message_set_body_fd(HTTP_MESSAGE *msg, int fd, const char *path, int body_length);
 int build_error_response(HTTP_MESSAGE *msg, int status_code, const char *status_message,
                          const char *json_error_message);
@@ -148,7 +151,8 @@ int set_http_method_from_string(const char *str, uint32_t *method);
 int set_http_status_code_from_string(const char *str, uint32_t *status_code);
 
 /* HTTP_HEADER functions */
-const char *get_header_value(const HTTP_HEADER *header_array, const int length, const char *key);
+const char *get_header_value(const HTTP_HEADER *header_array, const int header_length,
+                             const char *key);
 
 /* Other helper functions*/
 int get_mime_type_from_path(const char *path, char *buffer, int buffer_length);
