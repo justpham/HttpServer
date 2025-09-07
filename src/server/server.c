@@ -70,7 +70,7 @@ server_router(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
 
 int
 main(void)
-{
+{    
     // listen on sock_fd, new connection on new_fd
     int sockfd, client_fd;
 
@@ -101,13 +101,10 @@ main(void)
                 build_error_response(&response, STATUS_BAD_REQUEST, "Bad Request", NULL);
                 close(client_fd);
                 exit(1);
+            } else {
+                print_http_message(&request, REQUEST);
+                server_router(&request, &response);
             }
-
-            // Print out the request info for debug purposes
-            print_http_message(&request, REQUEST);
-
-            // Put Request in Router
-            server_router(&request, &response);
 
             print_http_message(&response, RESPONSE);
 
