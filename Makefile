@@ -23,7 +23,7 @@ LD_LIBRARIES = -L$(CPPUTEST_HOME)/lib/aarch64-linux-gnu -lCppUTest -lCppUTestExt
 # Source Files
 COMMON_SOURCES = src$(SLASH)include$(SLASH)ip_helper.c src$(SLASH)include$(SLASH)cJSON.c src$(SLASH)include$(SLASH)http_parser.c src$(SLASH)include$(SLASH)http_lib.c src$(SLASH)include$(SLASH)http_builder.c src$(SLASH)include$(SLASH)random.c
 CLIENT_SOURCES = src$(SLASH)client$(SLASH)include$(SLASH)connect.c $(COMMON_SOURCES)
-SERVER_SOURCES = src$(SLASH)server$(SLASH)include$(SLASH)routes.c src$(SLASH)server$(SLASH)include$(SLASH)connect.c $(COMMON_SOURCES)
+SERVER_SOURCES = src$(SLASH)server$(SLASH)include$(SLASH)routes.c src$(SLASH)server$(SLASH)include$(SLASH)connect.c src$(SLASH)server$(SLASH)include$(SLASH)conn_map.c  $(COMMON_SOURCES)
 
 # Test Source Files
 TEST_SOURCES = $(wildcard $(TEST_DIRECTORY)$(SLASH)test_*.cpp)
@@ -48,6 +48,9 @@ $(TEST_BUILD_DIRECTORY)$(SLASH)%.o: $(TEST_DIRECTORY)$(SLASH)%.cpp | $(TEST_BUIL
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(INCLUDES) $(CLIENT_INCLUDES) $(SERVER_INCLUDES) -c $< -o $@
 
 $(TEST_BUILD_DIRECTORY)$(SLASH)connect.o: src$(SLASH)client$(SLASH)include$(SLASH)connect.c | $(TEST_BUILD_DIRECTORY)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+	
+$(TEST_BUILD_DIRECTORY)$(SLASH)conn_map.o: src$(SLASH)client$(SLASH)include$(SLASH)conn_map.c | $(TEST_BUILD_DIRECTORY)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 $(TEST_BUILD_DIRECTORY)$(SLASH)routes.o: src$(SLASH)server$(SLASH)include$(SLASH)routes.c | $(TEST_BUILD_DIRECTORY)

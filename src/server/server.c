@@ -8,6 +8,7 @@
 #include "http_parser.h"
 #include "include/connect.h"
 #include "include/routes.h"
+#include "conn_map.h"
 #include "ip_helper.h"
 #include "macros.h"
 #include <arpa/inet.h>
@@ -22,6 +23,15 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <time.h>
+
+#include <sys/epoll.h>
+
+#define SERVER_NAME         "HttpServer"
+
+#define MAX_EPOLL_EVENTS    16
+#define MAX_CONNECTIONS     64
+#define TIMEOUT_LIMIT       300
 
 int
 server_router(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
@@ -69,59 +79,214 @@ server_router(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
 }
 
 int
-main(void)
-{    
-    // listen on sock_fd, new connection on new_fd
-    int sockfd, client_fd;
+accept_loop(int server_fd, int epoll_fd, struct conn* map)
+{
+    int client_fd;
 
-    sockfd = server_setup();
-
-    while (1) { // main accept() loop
-        if ((client_fd = accept_connection(sockfd)) == -1) {
-            continue;
-        }
-
-        if (!fork()) {
-            close(sockfd); // child doesn't need this
-
-            srand((unsigned int) time(NULL));
-
-            HTTP_MESSAGE response = init_http_message();
-
-            // Default Headers
-            add_header(&response, "Server", "HttpServer");
-            add_header(&response, "Connection", "close");
-
-            // Recieve HTTP Request
-            HTTP_MESSAGE request = init_http_message();
-            if (parse_http_message(&request, client_fd, REQUEST) != 0) {
-                fprintf(stderr, "Failed to parse HTTP request\n");
-                // TODO: Move this error message inside parse_http_message to get more details about
-                // errors
-                build_error_response(&response, STATUS_BAD_REQUEST, "Bad Request", NULL);
-                close(client_fd);
-                exit(1);
+    while (1) {
+        client_fd = accept_connection (server_fd);
+        if (client_fd == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                /* no more pending connections */
+                return 0;
             } else {
-                print_http_message(&request, REQUEST);
-                server_router(&request, &response);
+                perror("accept");
+                return -1;
             }
-
-            print_http_message(&response, RESPONSE);
-
-            if (build_and_send_message(&response, client_fd, RESPONSE) != 0) {
-                fprintf(stderr, "Failed to send HTTP response to client successfully\n");
-            }
-
-            // Clean everything up
-            free_http_message(&request);
-            free_http_message(&response);
+        }
+        
+        // Set client_fd to nonblocking
+        int flags = fcntl(client_fd, F_GETFL, 0);
+        if (flags == -1) {
+            perror("fcntl F_GETFL");
+            return -1;
+        }
+        if (fcntl(client_fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+            perror("fcntl F_SETFL");
             close(client_fd);
-
-            exit(0);
+            return -1;
         }
 
-        close(client_fd); // parent doesn't need this
+        // Add to epoll and listen for read and write events
+        struct epoll_event ev;
+        ev.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
+        ev.data.fd = client_fd;
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1) {
+            perror("epoll_ctl ADD client");
+            close(client_fd);
+            return -1;
+        }
+
+        add_conn_to_map(map, client_fd, MAX_CONNECTIONS);
     }
 
     return 0;
+
+}
+
+
+int
+epoll_implementation(void)
+{
+
+    // TODO: Add a connection map (an array with special struct)
+    struct conn connection_map[MAX_CONNECTIONS];
+    struct epoll_event events[MAX_EPOLL_EVENTS];            // Buffer for epoll_wait()
+    struct epoll_event ev;
+    int num_events;
+
+    int epoll_fd;
+    int server_fd;
+
+    initialize_conn_map(connection_map, MAX_CONNECTIONS);
+
+    // Setup server
+    server_fd = server_setup();
+    if (server_fd == - 1) {
+        fprintf(stderr, "Server setup failed.\n");
+        return -1;
+    }
+
+    add_conn_to_map(connection_map, server_fd, MAX_CONNECTIONS);
+    
+    // Set listening socket to non blocking so epoll can continue
+    int flags = fcntl(server_fd, F_GETFL, 0);
+    if (flags == -1) {
+        perror("fcntl F_GETFL");
+        return -1;
+    }
+    if (fcntl(server_fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        perror("fcntl F_SETFL");
+        close(server_fd);
+        return -1;
+    }
+
+    // Setup EPOLL
+    epoll_fd = epoll_create1(0);
+
+    // Add listening socket to EPOLL
+    ev.data.fd = server_fd;
+    ev.events = EPOLLIN | EPOLLET;
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &ev) == -1) {
+        perror ("epoll_ctl for listening socket:");
+        close(server_fd);
+        return -1;
+    }
+
+    while (1) {
+        if ((num_events = epoll_wait(epoll_fd, events, MAX_EPOLL_EVENTS, -1)) == -1) {
+            perror("epoll_wait: ");
+            // TODO: Close active locations
+            return -1;
+        };
+
+        // Handle events
+        for (int event_iter = 0; event_iter < num_events; event_iter++) {
+
+            struct epoll_event curr_event = events[event_iter];
+            int curr_fd = curr_event.data.fd;
+
+            update_conn_time(connection_map, curr_fd, MAX_CONNECTIONS);
+
+            // Recieve a new request 
+            if (curr_fd == server_fd && curr_event.events & EPOLLIN) {
+                if (accept_loop(server_fd, epoll_fd, connection_map) == -1) {
+                    perror("accept_loop");
+                }
+                continue;
+            }
+
+            // TODO: Write Operation (Finish a write operation)
+            if (curr_event.events & EPOLLOUT) {
+                continue;
+            }
+
+            // Read Operation
+            if (curr_event.events & EPOLLIN) {
+
+                HTTP_MESSAGE response = init_http_message();
+                HTTP_MESSAGE request = init_http_message();
+
+                add_header(&response, "Server", SERVER_NAME);
+
+                if (parse_http_message(&request, curr_fd, REQUEST) != 0) {
+                    fprintf(stderr, "Failed to parse HTTP request\n");
+                    build_error_response(&response, STATUS_BAD_REQUEST, "Bad Request", NULL);
+                    close(curr_fd);
+                } else {
+                    print_http_message(&request, REQUEST);
+                    server_router(&request, &response);
+                }
+
+                print_http_message(&response, RESPONSE);
+
+                if (build_and_send_message(&response, curr_fd, RESPONSE) != 0) {
+                    fprintf(stderr, "Failed to send HTTP response to client successfully\n");
+                }
+
+                if (strcmp(get_header_value(request.headers, request.header_count, "Connection"), "close") == 0) {
+                    close(curr_fd);
+                    remove_conn_to_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                }
+
+                // Assume that we recieve and send the full messages.
+                free_http_message(&request);
+                free_http_message(&response);
+                continue;
+
+            }
+
+            // Close connection
+            if (curr_event.events & EPOLLRDHUP) {
+                close(curr_fd);
+                remove_conn_to_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                continue;
+
+            }
+
+            if (curr_event.events & (EPOLLERR | EPOLLHUP)) {
+                int err = 0;
+                socklen_t errlen = sizeof(err);
+                if (getsockopt(curr_fd, SOL_SOCKET, SO_ERROR, &err, &errlen) == -1) {
+                    perror("getsockopt");
+                } else if (err) {
+                    fprintf(stderr, "socket error on fd %d: %s\n", curr_fd, strerror(err));
+                } else {
+                    fprintf(stderr, "hangup on fd %d\n", curr_fd);
+                }
+                close(curr_fd);
+                remove_conn_to_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                continue;
+            }
+        }
+
+        // Check for current connection timeouts
+        for (int i = 0; i < MAX_CONNECTIONS; i++) {
+            time_t now = time(NULL);
+            if (now - connection_map[i].last_activity > TIMEOUT_LIMIT) {
+
+                HTTP_MESSAGE response = init_http_message();
+                build_error_response(&response, STATUS_REQUEST_TIMEOUT, "Request Timeout", NULL);
+                add_header(&response, "Server", SERVER_NAME);
+                add_header(&response, "Connection", "close");
+
+                if (build_and_send_message(&response, connection_map[i].fd, RESPONSE) != 0) {
+                    fprintf(stderr, "Failed to send HTTP response to client successfully\n");
+                }
+                free_http_message(&response);
+                close(connection_map[i].fd);
+                remove_conn_to_map(connection_map, connection_map[i].fd, MAX_CONNECTIONS);
+            }
+        }
+
+    }
+
+    return 0;
+
+}
+
+int main(void)
+{
+    return epoll_implementation();
 }
