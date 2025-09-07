@@ -114,6 +114,7 @@ main(void)
 
             // Clean everything up
             free_http_message(&request);
+            free_http_message(&response);
             close(client_fd);
 
             exit(0);
