@@ -29,10 +29,7 @@ SERVER_SOURCES = src$(SLASH)server$(SLASH)include$(SLASH)routes.c src$(SLASH)ser
 TEST_SOURCES = $(wildcard $(TEST_DIRECTORY)$(SLASH)test_*.cpp)
 TEST_OBJECTS = $(TEST_SOURCES:$(TEST_DIRECTORY)/%.cpp=$(TEST_BUILD_DIRECTORY)/%.o)
 
-all: $(BUILD_DIRECTORY) client server
-
-client: $(BUILD_DIRECTORY)
-	$(CC) $(CFLAGS) src$(SLASH)client$(SLASH)client.c $(CLIENT_SOURCES) $(CLIENT_INCLUDES) $(INCLUDES) -o $(BUILD_DIRECTORY)$(SLASH)client
+all: $(BUILD_DIRECTORY) server
 
 server: $(BUILD_DIRECTORY)
 	$(CC) $(CFLAGS) src$(SLASH)server$(SLASH)server.c $(SERVER_SOURCES) $(SERVER_INCLUDES) $(INCLUDES) -o $(BUILD_DIRECTORY)$(SLASH)server

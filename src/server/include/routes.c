@@ -89,6 +89,8 @@ static_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
         return -1;
     }
 
+    add_header(response, "Connection", "close");
+
     printf("Static file request: %s\n", request->start_line.request.request_target);
 
     // Get route

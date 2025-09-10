@@ -17,17 +17,15 @@
         int - status code
 */
 int
-build_and_send_headers(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
+build_and_send_headers(HTTP_MESSAGE *msg, int sock_fd, int off, int continuing, int http_message_type)
 {
-
     if (!msg || sock_fd == -1) {
         fprintf(stderr, "Invalid parameters\n");
         return -1;
     }
 
-    char buf[MAX_HEADERS_SIZE] = { 0 }; // Buffer to write to the socket
-
-    if (msg->body_fd != -1) {
+    // Create Headers about the body
+    if (!continuing && msg->body_fd != -1) {
         // Add Content-Length header
         char content_length_str[32];
         int file_length = get_file_length(msg->body_fd);
@@ -68,16 +66,36 @@ build_and_send_headers(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
             fprintf(stderr, "Failed to get MIME type\n");
             return -5;
         }
+    } else if (!continuing && msg->body_fd == -1) {
+        add_header(msg, "Content-Length", "0");
     }
+
+    char buf[MAX_HEADERS_SIZE] = { 0 }; // Buffer to write to the socket
 
     if (build_header(msg, http_message_type, buf, sizeof(buf)) != 0) {
         fprintf(stderr, "Failed to build header\n");
         return -2;
     }
 
-    if (send(sock_fd, buf, strlen(buf), 0) == -1) {
-        fprintf(stderr, "Failed to send headers\n");
-        return -3;
+    int len = strlen(buf);
+
+    while (off < len) {
+        ssize_t n = send(sock_fd, buf, strlen(buf), 0);
+
+        if (n > 0) { 
+            off += n; 
+            continue; 
+        }
+        if (n == -1) {
+            if (errno == EINTR) {
+                continue;   // retry
+            }
+            else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                return off;
+            } else {
+                return -1;
+            }
+        }
     }
 
     return 0;
@@ -166,21 +184,8 @@ build_header(HTTP_MESSAGE *msg, int http_message_type, char *buf, int buf_size)
 }
 
 int
-build_and_send_message(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
+build_and_send_body(HTTP_MESSAGE *msg, int sock_fd)
 {
-    // Send headers
-    if (build_and_send_headers(msg, sock_fd, http_message_type) != 0) {
-        fprintf(stderr, "Failed to send headers\n");
-        return -1;
-    }
-
-    // No body to send
-    if (msg->body_length == 0) {
-        return 0;
-    }
-
-    int bytes_remaining = msg->body_length;
-    char read_buf[FILE_READ_BUFFER_SIZE] = { 0 };
 
     // Check if msg->body_fd is valid
     if (msg->body_fd == -1) {
@@ -188,31 +193,24 @@ build_and_send_message(HTTP_MESSAGE *msg, int sock_fd, int http_message_type)
         return -1;
     }
 
+    int bytes_remaining = get_file_length(msg->body_fd);
+
     while (bytes_remaining > 0) {
+        ssize_t n = sendfile(sock_fd, msg->body_fd, NULL, bytes_remaining);
 
-        lseek(msg->body_fd, 0, SEEK_SET);
-
-        int bytes_to_read = MIN(bytes_remaining, FILE_READ_BUFFER_SIZE);
-
-        int bytes_read = read(msg->body_fd, read_buf, bytes_to_read);
-        if (bytes_read == -1) {
-            perror("read failed");
-            return -2;
-        } else if (bytes_read == 0) {
-            // Nothing has been read so nothing to actually send
+        if (n == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                return 1;
+            } else {
+                return -1;
+            }
+        } else if (n == 0) {
+            // Unexpected EOF
+            bytes_remaining = 0;
             break;
+        } else {
+            bytes_remaining -= n;
         }
-
-        int bytes_sent = send(sock_fd, read_buf, bytes_read, 0);
-        if (bytes_sent < 0) {
-            perror("send failed");
-            return -3;
-        } else if (bytes_sent == 0) {
-            // Nothing has been sent so nothing to actually read
-            break;
-        }
-
-        bytes_remaining -= bytes_sent;
     }
 
     return 0;

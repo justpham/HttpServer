@@ -332,6 +332,9 @@ build_error_response(HTTP_MESSAGE *msg, int status_code, const char *status_mess
             free_http_message(msg);
             return -5;
         }
+    } else {
+        msg->body_length = 0;
+        add_header(msg, "Content-Length", "0");
     }
 
     return 0;

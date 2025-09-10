@@ -4,6 +4,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <errno.h>
 
 #include "http_lib.h"
 
@@ -15,6 +16,8 @@ int parse_start_line(char *line, HTTP_START_LINE *start_line, int http_message_t
 
 int parse_header(char *line, HTTP_HEADER *header);
 
-int parse_body_stream(int in_fd, int content_length, char *buffer, int out_fd);
+int parse_body_stream(int in_fd, int content_length, char *buffer, int buffer_size, int out_fd);
 
-int parse_http_message(HTTP_MESSAGE *message, int client_fd, int http_message_type);
+int parse_http_headers(HTTP_MESSAGE *message, char *buffer, int buffer_size, int client_fd, bool continuing, int http_message_type);
+
+int parse_http_body(HTTP_MESSAGE *message, char *buffer, int buffer_size, int client_fd, bool continuing);
