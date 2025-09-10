@@ -168,3 +168,41 @@ static_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
     return 0;
 }
 
+int
+favicon_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
+{
+    if (!request || !response) {
+        build_error_response(response, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
+        return -1;
+    }
+
+    int method = request->start_line.request.method;
+
+    // Only accept GET requests
+    if (method != HTTP_GET) {
+        response->start_line.response.status_code = STATUS_METHOD_NOT_ALLOWED;
+        strcpy(response->start_line.response.status_message, "Method Not Allowed");
+        add_header(response, "Allow", "GET");
+        return -1;
+    }
+
+    // Try to serve favicon.ico from static directory
+    const char *favicon_path = "./static/favicon.ico";
+    
+    // Check if favicon exists
+    if (access(favicon_path, F_OK) == 0) {
+        // File exists, serve it
+        response->start_line.response.status_code = STATUS_OK;
+        strcpy(response->start_line.response.status_message, "OK");
+        add_header(response, "Content-Type", "image/x-icon");
+        add_header(response, "Cache-Control", "public, max-age=86400"); // Cache for 1 day
+        return http_message_open_existing_file(response, favicon_path, O_RDONLY, true);
+    } else {
+        // TODO: add 204 status code to enum
+        response->start_line.response.status_code = 204;
+        strcpy(response->start_line.response.status_message, "No Content");
+        add_header(response, "Cache-Control", "public, max-age=86400");
+        return 0;
+    }
+}
+

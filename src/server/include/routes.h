@@ -22,3 +22,4 @@
 int default_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response);
 int echo_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response);
 int static_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response);
+int favicon_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response);

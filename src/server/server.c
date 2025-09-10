@@ -125,6 +125,14 @@ server_router(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
             strcpy(response->start_line.response.status_message, "Method Not Allowed");
             add_header(response, "Allow", "POST");
         }
+    } else if (strcmp(route, "/favicon.ico") == 0) {
+        if (method == HTTP_GET) {
+            favicon_handler(request, response);
+        } else {
+            response->start_line.response.status_code = STATUS_METHOD_NOT_ALLOWED;
+            strcpy(response->start_line.response.status_message, "Method Not Allowed");
+            add_header(response, "Allow", "GET");
+        }
     } else if (strncmp(route, "/static", 7) == 0) {
         if (method == HTTP_GET) {
             static_handler(request, response);
