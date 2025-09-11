@@ -33,6 +33,11 @@ free_conn_map(struct conn *map, int length)
 int
 add_conn_to_map(struct conn *map, int fd, int length)
 {
+
+    if (fd == -1) {
+        fprintf(stderr, "Cannot add fd = -1 to map\n");
+    }
+
     for (int i = 0; i < length; i++) {
         if (map[i].fd == -1) {
             map[i].fd = fd;

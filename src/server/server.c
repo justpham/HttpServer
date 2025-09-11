@@ -41,8 +41,17 @@
 
 static volatile sig_atomic_t shutdown_requested = 0;
 
+void
+cleanup_connection(struct conn* connection_map, int fd, int max_connections, int epoll_fd)
+{
+    // Remove from epoll first to prevent future events
+    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
+    // Then remove from connection map (this will close the fd)
+    remove_conn_from_map(connection_map, fd, max_connections);
+}
+
 int 
-send_error_response(HTTP_MESSAGE *response, int fd, struct conn *map)
+send_error_response(HTTP_MESSAGE *response, int fd, struct conn *map, int epoll_fd)
 {
     if (response == NULL) {
         fprintf(stderr, "send_error_response(): response is NULL!\n");
@@ -64,7 +73,7 @@ send_error_response(HTTP_MESSAGE *response, int fd, struct conn *map)
     if (ret < 0) {
         fprintf(stderr, "Failed to send HTTP headers to client\n");
         // Special case where we can't send an HTTP message to the client, so simply close the fd.
-        remove_conn_from_map(map, fd, MAX_CONNECTIONS);
+        cleanup_connection(map, fd, MAX_CONNECTIONS, epoll_fd);
         return -1;
     }
 
@@ -76,12 +85,12 @@ send_error_response(HTTP_MESSAGE *response, int fd, struct conn *map)
         if (ret < 0) {
             fprintf(stderr, "Failed to send HTTP headers to client\n");
             // Special case where we can't send an HTTP message to the client, so simply close the fd.
-            remove_conn_from_map(map, fd, MAX_CONNECTIONS);
+            cleanup_connection(map, fd, MAX_CONNECTIONS, epoll_fd);
             return -1;
         }
     }
 
-    remove_conn_from_map(map, fd, MAX_CONNECTIONS);
+    cleanup_connection(map, fd, MAX_CONNECTIONS, epoll_fd);
 
     return 0;
 }
@@ -162,6 +171,13 @@ accept_loop(int server_fd, int epoll_fd, struct conn* map)
                 return -1;
             }
         }
+
+        // Add this debug check
+        if (client_fd == 0) {
+            fprintf(stderr, "WARNING: accept_connection returned FD 0 (stdin)!\n");
+            close(client_fd);
+            continue;
+        }
         
         // Set client_fd to nonblocking
         int flags = fcntl(client_fd, F_GETFL, 0);
@@ -183,6 +199,8 @@ accept_loop(int server_fd, int epoll_fd, struct conn* map)
             perror("epoll_ctl ADD client");
             close(client_fd);
             return -1;
+        } else {
+            fprintf(stderr, "DEBUG: Added FD %d to epoll\n", client_fd);
         }
 
         add_conn_to_map(map, client_fd, MAX_CONNECTIONS);
@@ -220,12 +238,18 @@ epoll_implementation(void)
 
     // Setup server
     server_fd = server_setup();
+
+    fprintf(stderr, "DEBUG: server_setup() returned FD %d\n", server_fd);
+
     if (server_fd == - 1) {
         fprintf(stderr, "Server setup failed.\n");
         return -1;
     }
 
     add_conn_to_map(connection_map, server_fd, MAX_CONNECTIONS);
+
+    fprintf(stderr, "DEBUG: Added server FD %d to connection map\n", server_fd);
+    fprintf(stderr, "DEBUG: Connection map slot 0 has FD %d\n", connection_map[0].fd);
     
     // Set listening socket to non blocking so epoll can continue
     int flags = fcntl(server_fd, F_GETFL, 0);
@@ -245,6 +269,8 @@ epoll_implementation(void)
     // Add listening socket to EPOLL
     ev.data.fd = server_fd;
     ev.events = EPOLLIN | EPOLLET;
+
+    fprintf(stderr, "Adding Server FD %d to EPOLL\n", server_fd);
 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &ev) == -1) {
         perror ("epoll_ctl for listening socket:");
@@ -272,9 +298,19 @@ epoll_implementation(void)
             int curr_fd = curr_event.data.fd;
             struct conn *curr_conn = get_conn(connection_map, curr_fd, MAX_CONNECTIONS);
 
+            fprintf(stderr, "DEBUG: Processing epoll event for FD %d, events=0x%x\n", curr_fd, curr_event.events);
+
             if (curr_conn == NULL) {
                 fprintf(stderr, "Unknown FD (%d) for event iter %d\n", curr_fd, event_iter);
-                close(curr_fd);
+                // Add this debug to see if FD 0 is anywhere in the connection map
+                fprintf(stderr, "DEBUG: Checking if FD %d exists in connection map:\n", curr_fd);
+                for (int i = 0; i < MAX_CONNECTIONS; i++) {
+                    if (connection_map[i].fd == curr_fd) {
+                        fprintf(stderr, "DEBUG: Found FD %d at index %d\n", curr_fd, i);
+                    }
+                }
+                // Try to remove from epoll before closing
+                epoll_ctl(epoll_fd, EPOLL_CTL_DEL, curr_fd, NULL);
                 continue;
             }
 
@@ -302,7 +338,7 @@ epoll_implementation(void)
                         shallow_copy_http_message_to_conn(curr_conn, init_http_message(), RESPONSE);
                     }
                     build_error_response(curr_conn->response, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
-                    send_error_response(curr_conn->response, curr_fd, connection_map);
+                    send_error_response(curr_conn->response, curr_fd, connection_map, epoll_fd);
                     continue;
                 }
 
@@ -310,7 +346,7 @@ epoll_implementation(void)
                     // The response should be built 
                     shallow_copy_http_message_to_conn(curr_conn, init_http_message(), RESPONSE);
                     build_error_response(curr_conn->response, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
-                    send_error_response(curr_conn->response, curr_fd, connection_map);
+                    send_error_response(curr_conn->response, curr_fd, connection_map, epoll_fd);
                     continue;
                 }
 
@@ -326,7 +362,7 @@ epoll_implementation(void)
                     case PARSING_BODY:
                         shallow_copy_http_message_to_conn(curr_conn, init_http_message(), RESPONSE);
                         build_error_response(curr_conn->response, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
-                        send_error_response(curr_conn->response, curr_fd, connection_map);
+                        send_error_response(curr_conn->response, curr_fd, connection_map, epoll_fd);
                         continue;
 
                     case SENDING_HEADERS:
@@ -335,7 +371,7 @@ epoll_implementation(void)
                         if (ret < 0) {
                             fprintf(stderr, "Failed to send HTTP headers to client\n");
                             // Special case where we can't send an HTTP message to the client, so simply close the fd.
-                            remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                            cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                             continue;
                         } else if (ret > 0) {
                             curr_conn->offset = ret; // build_and_send_headers() returns the number of bytes read for a partial read
@@ -343,7 +379,7 @@ epoll_implementation(void)
                             ev.events = SEND_EPOLL_FLAGS;
                             if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, curr_fd, &ev) == -1) {
                                 perror ("epoll_ctl for client socket:");
-                                remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                                cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                                 continue;
                             }
                             fprintf(stderr, "[FD: %d] Sent back to epoll\n", curr_fd);
@@ -358,14 +394,14 @@ epoll_implementation(void)
                             if (ret < 0) {
                                 fprintf(stderr, "Failed to send HTTP headers to client\n");
                                 // Special case where we can't send an HTTP message to the client, so simply close the fd.
-                                remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                                cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                                 continue;
                             } else if (ret > 0) {
                                 memset(&ev, 0, sizeof(struct epoll_event));
                                 ev.events = SEND_EPOLL_FLAGS;
                                 if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, curr_fd, &ev) == -1) {
                                     perror ("epoll_ctl for client socket:");
-                                    remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                                    cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                                     continue;
                                 }
                                 fprintf(stderr, "[FD: %d] Sent back to epoll\n", curr_fd);
@@ -376,7 +412,7 @@ epoll_implementation(void)
                     default:
                         const char* connection_header_value = get_header_value(curr_conn->request->headers, curr_conn->request->header_count, "Connection");
                         if (connection_header_value && strcmp(connection_header_value, "close") == 0) {
-                            remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                            cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                             continue;
                         }
 
@@ -384,7 +420,7 @@ epoll_implementation(void)
                         ev.events = RECV_EPOLL_FLAGS;
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, curr_fd, &ev) == -1) {
                             perror ("epoll_ctl for client socket:");
-                            remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                            cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                             continue;
                         }
 
@@ -415,7 +451,7 @@ epoll_implementation(void)
                         if (allocate_conn_buffer(curr_conn, 8 * KB) < 0) {
                             fprintf(stderr, "allocate_conn_buffer() error\n");\
                             build_error_response(response, STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error", NULL);
-                            send_error_response(response, curr_fd, connection_map);
+                            send_error_response(response, curr_fd, connection_map, epoll_fd);
                             continue;
                         } else {
                             // Reset the buffer on reading a new request
@@ -429,7 +465,7 @@ epoll_implementation(void)
                         if (ret < 0) {
                             fprintf(stderr, "Failed to parse HTTP request headers\n");
                             build_error_response(response, STATUS_BAD_REQUEST, "Bad Request", NULL);
-                            send_error_response(response, curr_fd, connection_map);
+                            send_error_response(response, curr_fd, connection_map, epoll_fd);
                             continue;
                         } else if (ret > 0) {
                             // Send back to epoll
@@ -443,7 +479,7 @@ epoll_implementation(void)
                         if (ret < 0) {
                             fprintf(stderr, "Failed to parse HTTP request body\n");
                             build_error_response(response, STATUS_BAD_REQUEST, "Bad Request", NULL);
-                            send_error_response(response, curr_fd, connection_map);
+                            send_error_response(response, curr_fd, connection_map, epoll_fd);
                             continue;
                         } else if (ret > 0) {
                             // Send back to epoll
@@ -457,7 +493,7 @@ epoll_implementation(void)
                         if (server_router(request, response) != 0) {
                             fprintf(stderr, "Failed to parse HTTP request\n");
                             // error response is built inside the server router
-                            send_error_response(response, curr_fd, connection_map);
+                            send_error_response(response, curr_fd, connection_map, epoll_fd);
                             continue;
                         };
 
@@ -470,7 +506,7 @@ epoll_implementation(void)
                         if (ret < 0) {
                             fprintf(stderr, "Failed to send HTTP headers to client\n");
                             // Special case where we can't send an HTTP message to the client, so simply close the fd.
-                            remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                            cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                             continue;
                         } else if (ret > 0) {
                             curr_conn->offset = ret; // build_and_send_headers() returns the number of bytes read for a partial read
@@ -478,7 +514,7 @@ epoll_implementation(void)
                             ev.events = SEND_EPOLL_FLAGS;
                             if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, curr_fd, &ev) == -1) {
                                 perror ("epoll_ctl for client socket:");
-                                remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                                cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                                 continue;
                             }
                             fprintf(stderr, "[FD: %d] Sent back to epoll\n", curr_fd);
@@ -493,14 +529,14 @@ epoll_implementation(void)
                             if (ret < 0) {
                                 fprintf(stderr, "Failed to send HTTP headers to client\n");
                                 // Special case where we can't send an HTTP message to the client, so simply close the fd.
-                                remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                                cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                                 continue;
                             } else if (ret > 0) {
                                 memset(&ev, 0, sizeof(struct epoll_event));
                                 ev.events = SEND_EPOLL_FLAGS;
                                 if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, curr_fd, &ev) == -1) {
                                     perror ("epoll_ctl for client socket:");
-                                    remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                                    cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                                     continue;
                                 }
                                 fprintf(stderr, "[FD: %d] Sent back to epoll\n", curr_fd);
@@ -512,7 +548,7 @@ epoll_implementation(void)
                         const char* connection_header_value = get_header_value(curr_conn->request->headers, curr_conn->request->header_count, "Connection");
                         if (connection_header_value && strcmp(connection_header_value, "close") == 0) {
                             fprintf(stderr, "[FD %d]: Closed connection\n", curr_fd);
-                            remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                            cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                             continue;
                         }
 
@@ -520,7 +556,7 @@ epoll_implementation(void)
                         ev.events = RECV_EPOLL_FLAGS;
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, curr_fd, &ev) == -1) {
                             perror ("epoll_ctl for client socket:");
-                            remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                            cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                             continue;
                         }
 
@@ -530,7 +566,7 @@ epoll_implementation(void)
 
             // Close client connection
             else if (curr_event.events & EPOLLRDHUP) {
-                remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                 continue;
             }
 
@@ -544,7 +580,7 @@ epoll_implementation(void)
                 } else {
                     fprintf(stderr, "hangup on fd %d\n", curr_fd);
                 }
-                remove_conn_from_map(connection_map, curr_fd, MAX_CONNECTIONS);
+                cleanup_connection(connection_map, curr_fd, MAX_CONNECTIONS, epoll_fd);
                 continue;
             }
         }
@@ -573,12 +609,12 @@ epoll_implementation(void)
                 add_header(connection_map[i].response, "Server", SERVER_NAME);
                 add_header(connection_map[i].response, "Connection", "close");
 
-                ret = send_error_response(connection_map[i].response, connection_map[i].fd, connection_map);
+                ret = send_error_response(connection_map[i].response, connection_map[i].fd, connection_map, epoll_fd);
                 if (ret < 0) {
                     fprintf(stderr, "Failed to send HTTP response to client successfully\n");
                 }
 
-                remove_conn_from_map(connection_map, connection_map[i].fd, MAX_CONNECTIONS);
+                cleanup_connection(connection_map, connection_map[i].fd, MAX_CONNECTIONS, epoll_fd);
             }
 
             else if (connection_map[i].action_count >= ACTIONS_LIMIT) {
@@ -591,12 +627,12 @@ epoll_implementation(void)
                 add_header(connection_map[i].response, "Server", SERVER_NAME);
                 add_header(connection_map[i].response, "Connection", "close");
 
-                ret = send_error_response(connection_map[i].response, connection_map[i].fd, connection_map);
+                ret = send_error_response(connection_map[i].response, connection_map[i].fd, connection_map, epoll_fd);
                 if (ret < 0) {
                     fprintf(stderr, "Failed to send HTTP response to client successfully\n");
                 }
 
-                remove_conn_from_map(connection_map, connection_map[i].fd, MAX_CONNECTIONS);
+                cleanup_connection(connection_map, connection_map[i].fd, MAX_CONNECTIONS, epoll_fd);
             }
         }
 
