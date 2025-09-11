@@ -1,9 +1,9 @@
 
 #pragma once
 
+#include "connect.h"
 #include "http_builder.h"
 #include "http_parser.h"
-#include "connect.h"
 #include "ip_helper.h"
 #include "macros.h"
 #include <arpa/inet.h>

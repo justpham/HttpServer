@@ -188,7 +188,7 @@ favicon_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
 
     // Try to serve favicon.ico from static directory
     const char *favicon_path = "./static/favicon.ico";
-    
+
     // Check if favicon exists
     if (access(favicon_path, F_OK) == 0) {
         // File exists, serve it
@@ -198,11 +198,9 @@ favicon_handler(HTTP_MESSAGE *request, HTTP_MESSAGE *response)
         add_header(response, "Cache-Control", "public, max-age=86400"); // Cache for 1 day
         return http_message_open_existing_file(response, favicon_path, O_RDONLY, true);
     } else {
-        // TODO: add 204 status code to enum
-        response->start_line.response.status_code = 204;
+        response->start_line.response.status_code = STATUS_NO_CONTENT;
         strcpy(response->start_line.response.status_message, "No Content");
         add_header(response, "Cache-Control", "public, max-age=86400");
         return 0;
     }
 }
-

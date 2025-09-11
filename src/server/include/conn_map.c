@@ -3,7 +3,7 @@
 
 #define _GNU_SOURCE
 
-int 
+int
 initialize_conn_map(struct conn *map, int length)
 {
     for (int i = 0; i < length; i++) {
@@ -55,7 +55,7 @@ add_conn_to_map(struct conn *map, int fd, int length)
     return -1;
 }
 
-struct conn*
+struct conn *
 get_conn(struct conn *map, int fd, int length)
 {
 
@@ -144,29 +144,28 @@ set_conn_state(struct conn *conn, int conn_state)
         return -1;
     }
 
-    char *state = "UNKNOWN";
+    const char *state;
 
     switch (conn_state) {
-        case IDLE:
-            state = "IDLE";
-            break;
-        case PARSING_HEADERS:
-            state = "PARSING_HEADERS";
-            break;
-        case PARSING_BODY:
-            state = "PARSING_BODY";
-            break;
-        case SENDING_HEADERS:
-            state = "SENDING_HEADERS";
-            break;
-        case SENDING_BODY:
-            state = "SENDING_BODY";
-            break;
-        default:
-            state = "UNKNOWN";
-            break;
+    case IDLE:
+        state = "IDLE";
+        break;
+    case PARSING_HEADERS:
+        state = "PARSING_HEADERS";
+        break;
+    case PARSING_BODY:
+        state = "PARSING_BODY";
+        break;
+    case SENDING_HEADERS:
+        state = "SENDING_HEADERS";
+        break;
+    case SENDING_BODY:
+        state = "SENDING_BODY";
+        break;
+    default:
+        state = "UNKNOWN";
+        break;
     }
-
 
     fprintf(stderr, "[FD: %d] Entering State %s\n", conn->fd, state);
     conn->state = conn_state;
@@ -194,7 +193,6 @@ shallow_copy_http_message_to_conn(struct conn *conn, HTTP_MESSAGE message, int h
         return -1;
     }
     return 0;
-
 }
 
 int
@@ -203,9 +201,9 @@ allocate_conn_buffer(struct conn *conn, int char_length)
     if (conn == NULL) {
         return -1;
     }
-    
+
     if (conn->buffer != NULL) {
-        return 1;   // Not necessarily an error, but keep the old buffer
+        return 1; // Not necessarily an error, but keep the old buffer
     }
 
     conn->offset = 0;
@@ -220,8 +218,7 @@ update_conn_time(struct conn *conn)
     if (conn == NULL) {
         return -1;
     }
-    
+
     conn->last_activity = time(NULL);
     return 0;
 }
-

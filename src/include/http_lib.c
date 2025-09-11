@@ -470,14 +470,20 @@ get_value_from_http_status_code(uint32_t status_code, char *buffer, int buffer_l
     switch (status_code) {
     case STATUS_OK:
         return snprintf(buffer, buffer_length, "200");
+    case STATUS_NO_CONTENT:
+        return snprintf(buffer, buffer_length, "204");
     case STATUS_BAD_REQUEST:
         return snprintf(buffer, buffer_length, "400");
+    case STATUS_FORBIDDEN:
+        return snprintf(buffer, buffer_length, "403");
     case STATUS_NOT_FOUND:
         return snprintf(buffer, buffer_length, "404");
     case STATUS_METHOD_NOT_ALLOWED:
         return snprintf(buffer, buffer_length, "405");
     case STATUS_UNSUPPORTED_MEDIA_TYPE:
         return snprintf(buffer, buffer_length, "415");
+    case STATUS_INTERNAL_SERVER_ERROR:
+        return snprintf(buffer, buffer_length, "500");
     default:
         return snprintf(buffer, buffer_length, "???");
     }
@@ -531,6 +537,8 @@ set_http_status_code_from_string(const char *str, uint32_t *status_code)
 
     if (strcmp(str, "200") == 0) {
         *status_code = STATUS_OK;
+    } else if (strcmp(str, "204") == 0) {
+        *status_code = STATUS_NO_CONTENT;
     } else if (strcmp(str, "400") == 0) {
         *status_code = STATUS_BAD_REQUEST;
     } else if (strcmp(str, "403") == 0) {

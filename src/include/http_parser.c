@@ -160,7 +160,7 @@ parse_body_stream(int sock_fd, int content_length, char *buffer, int buffer_size
     // Get the size of the file
     int current_file_length = get_file_length(file_fd);
 
-    if (current_file_length < 0){
+    if (current_file_length < 0) {
         fprintf(stderr, "Failed to get file length\n");
         return -1;
     }
@@ -214,7 +214,8 @@ parse_body_stream(int sock_fd, int content_length, char *buffer, int buffer_size
 }
 
 int
-parse_http_headers(HTTP_MESSAGE *message, char *buffer, int buffer_size, int client_fd, bool continuing, int http_message_type)
+parse_http_headers(HTTP_MESSAGE *message, char *buffer, int buffer_size, int client_fd,
+                   bool continuing, int http_message_type)
 {
 
     char *recv_start = &buffer[0]; // Point at the start of the array
@@ -225,14 +226,13 @@ parse_http_headers(HTTP_MESSAGE *message, char *buffer, int buffer_size, int cli
     int current_buffer_length;
 
     // Parse the initial header section of the HTTP request
-    while ((bytes_received = recv(client_fd, recv_start, buffer_size - recv_offset - 1, 0))
-           != 0) {
+    while ((bytes_received = recv(client_fd, recv_start, buffer_size - recv_offset - 1, 0)) != 0) {
 
         if (bytes_received == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 return 1;
             } else {
-                perror ("recv: ");
+                perror("recv: ");
                 return -1;
             }
         }
@@ -311,7 +311,8 @@ parse_http_headers(HTTP_MESSAGE *message, char *buffer, int buffer_size, int cli
 }
 
 int
-parse_http_body(HTTP_MESSAGE *message, char *buffer, int buffer_size, int client_fd, bool continuing)
+parse_http_body(HTTP_MESSAGE *message, char *buffer, int buffer_size, int client_fd,
+                bool continuing)
 {
     int return_code = 0;
 
@@ -336,8 +337,8 @@ parse_http_body(HTTP_MESSAGE *message, char *buffer, int buffer_size, int client
         }
 
         // Parse the body
-        if ((return_code
-             = parse_body_stream(client_fd, message->body_length, buffer, buffer_size, message->body_fd))
+        if ((return_code = parse_body_stream(client_fd, message->body_length, buffer, buffer_size,
+                                             message->body_fd))
             < 0) {
             fprintf(stderr, "Failed to parse body. Return code: %d\n", return_code);
             return -1;
@@ -345,5 +346,4 @@ parse_http_body(HTTP_MESSAGE *message, char *buffer, int buffer_size, int client
     }
 
     return return_code;
-
 }

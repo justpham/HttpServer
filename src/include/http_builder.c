@@ -17,7 +17,8 @@
         int - status code
 */
 int
-build_and_send_headers(HTTP_MESSAGE *msg, int sock_fd, int off, int continuing, int http_message_type)
+build_and_send_headers(HTTP_MESSAGE *msg, int sock_fd, int off, int continuing,
+                       int http_message_type)
 {
     if (!msg || sock_fd == -1) {
         fprintf(stderr, "Invalid parameters\n");
@@ -82,15 +83,14 @@ build_and_send_headers(HTTP_MESSAGE *msg, int sock_fd, int off, int continuing, 
     while (off < len) {
         ssize_t n = send(sock_fd, buf, strlen(buf), 0);
 
-        if (n > 0) { 
-            off += n; 
-            continue; 
+        if (n > 0) {
+            off += n;
+            continue;
         }
         if (n == -1) {
             if (errno == EINTR) {
-                continue;   // retry
-            }
-            else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue; // retry
+            } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 return off;
             } else {
                 return -1;
@@ -206,7 +206,6 @@ build_and_send_body(HTTP_MESSAGE *msg, int sock_fd)
             }
         } else if (n == 0) {
             // Unexpected EOF
-            bytes_remaining = 0;
             break;
         } else {
             bytes_remaining -= n;
