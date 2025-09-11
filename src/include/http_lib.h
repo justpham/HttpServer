@@ -50,6 +50,7 @@ enum HTTP_STATUS_CODE
     STATUS_FORBIDDEN = 403,
     STATUS_NOT_FOUND = 404,
     STATUS_METHOD_NOT_ALLOWED = 405,
+    STATUS_REQUEST_TIMEOUT = 408,
     STATUS_UNSUPPORTED_MEDIA_TYPE = 415,
     STATUS_INTERNAL_SERVER_ERROR = 500,
     HTTP_STATUS_CODE_UNKNOWN = 999
@@ -83,7 +84,7 @@ typedef struct
     uint32_t protocol;                      // HTTP version (e.g., HTTP/1.1)
     uint32_t method;                        // HTTP method (e.g., GET, POST)
     char request_target[MAX_TARGET_LENGTH]; // Request target (e.g., /index.html)
-} HTTP_REQUEST_START_LINE; // TODO : I can probably use integers and enums here to save space
+} HTTP_REQUEST_START_LINE;
 
 /*
     HTTP Response Start Line Struct
@@ -96,7 +97,7 @@ typedef struct
     uint32_t protocol;                              // Protocol (e.g., HTTP/1.1)
     uint32_t status_code;                           // Status code (e.g., 200)
     char status_message[MAX_STATUS_MESSAGE_LENGTH]; // Status message (e.g., OK)
-} HTTP_RESPONSE_START_LINE; // TODO : I can probably use integers and enums here to save space
+} HTTP_RESPONSE_START_LINE;
 
 /*
     HTTP Start Line Struct

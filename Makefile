@@ -23,16 +23,13 @@ LD_LIBRARIES = -L$(CPPUTEST_HOME)/lib/aarch64-linux-gnu -lCppUTest -lCppUTestExt
 # Source Files
 COMMON_SOURCES = src$(SLASH)include$(SLASH)ip_helper.c src$(SLASH)include$(SLASH)cJSON.c src$(SLASH)include$(SLASH)http_parser.c src$(SLASH)include$(SLASH)http_lib.c src$(SLASH)include$(SLASH)http_builder.c src$(SLASH)include$(SLASH)random.c
 CLIENT_SOURCES = src$(SLASH)client$(SLASH)include$(SLASH)connect.c $(COMMON_SOURCES)
-SERVER_SOURCES = src$(SLASH)server$(SLASH)include$(SLASH)connect.c $(COMMON_SOURCES)
+SERVER_SOURCES = src$(SLASH)server$(SLASH)include$(SLASH)routes.c src$(SLASH)server$(SLASH)include$(SLASH)connect.c src$(SLASH)server$(SLASH)include$(SLASH)conn_map.c  $(COMMON_SOURCES)
 
 # Test Source Files
 TEST_SOURCES = $(wildcard $(TEST_DIRECTORY)$(SLASH)test_*.cpp)
 TEST_OBJECTS = $(TEST_SOURCES:$(TEST_DIRECTORY)/%.cpp=$(TEST_BUILD_DIRECTORY)/%.o)
 
-all: $(BUILD_DIRECTORY) client server
-
-client: $(BUILD_DIRECTORY)
-	$(CC) $(CFLAGS) src$(SLASH)client$(SLASH)client.c $(CLIENT_SOURCES) $(CLIENT_INCLUDES) $(INCLUDES) -o $(BUILD_DIRECTORY)$(SLASH)client
+all: $(BUILD_DIRECTORY) server
 
 server: $(BUILD_DIRECTORY)
 	$(CC) $(CFLAGS) src$(SLASH)server$(SLASH)server.c $(SERVER_SOURCES) $(SERVER_INCLUDES) $(INCLUDES) -o $(BUILD_DIRECTORY)$(SLASH)server
@@ -41,7 +38,7 @@ server: $(BUILD_DIRECTORY)
 test: $(TEST_BUILD_DIRECTORY)$(SLASH)test_runner
 	./$(TEST_BUILD_DIRECTORY)$(SLASH)test_runner -v
 
-$(TEST_BUILD_DIRECTORY)$(SLASH)test_runner: $(TEST_OBJECTS) $(TEST_BUILD_DIRECTORY)$(SLASH)connect.o $(TEST_BUILD_DIRECTORY)$(SLASH)ip_helper.o $(TEST_BUILD_DIRECTORY)$(SLASH)cJSON.o $(TEST_BUILD_DIRECTORY)$(SLASH)http_parser.o $(TEST_BUILD_DIRECTORY)$(SLASH)http_lib.o $(TEST_BUILD_DIRECTORY)$(SLASH)http_builder.o $(TEST_BUILD_DIRECTORY)$(SLASH)random.o $(TEST_BUILD_DIRECTORY)$(SLASH)send_mock.o
+$(TEST_BUILD_DIRECTORY)$(SLASH)test_runner: $(TEST_OBJECTS) $(TEST_BUILD_DIRECTORY)$(SLASH)connect.o $(TEST_BUILD_DIRECTORY)$(SLASH)ip_helper.o $(TEST_BUILD_DIRECTORY)$(SLASH)cJSON.o $(TEST_BUILD_DIRECTORY)$(SLASH)http_parser.o $(TEST_BUILD_DIRECTORY)$(SLASH)http_lib.o $(TEST_BUILD_DIRECTORY)$(SLASH)http_builder.o $(TEST_BUILD_DIRECTORY)$(SLASH)routes.o $(TEST_BUILD_DIRECTORY)$(SLASH)random.o $(TEST_BUILD_DIRECTORY)$(SLASH)send_mock.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LD_LIBRARIES)
 
 $(TEST_BUILD_DIRECTORY)$(SLASH)%.o: $(TEST_DIRECTORY)$(SLASH)%.cpp | $(TEST_BUILD_DIRECTORY)
@@ -49,6 +46,12 @@ $(TEST_BUILD_DIRECTORY)$(SLASH)%.o: $(TEST_DIRECTORY)$(SLASH)%.cpp | $(TEST_BUIL
 
 $(TEST_BUILD_DIRECTORY)$(SLASH)connect.o: src$(SLASH)client$(SLASH)include$(SLASH)connect.c | $(TEST_BUILD_DIRECTORY)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+	
+$(TEST_BUILD_DIRECTORY)$(SLASH)conn_map.o: src$(SLASH)client$(SLASH)include$(SLASH)conn_map.c | $(TEST_BUILD_DIRECTORY)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+$(TEST_BUILD_DIRECTORY)$(SLASH)routes.o: src$(SLASH)server$(SLASH)include$(SLASH)routes.c | $(TEST_BUILD_DIRECTORY)
+	$(CC) $(CFLAGS) $(INCLUDES) $(SERVER_INCLUDES) -c $< -o $@
 
 $(TEST_BUILD_DIRECTORY)$(SLASH)ip_helper.o: src$(SLASH)include$(SLASH)ip_helper.c | $(TEST_BUILD_DIRECTORY)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@

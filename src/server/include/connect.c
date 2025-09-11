@@ -81,7 +81,7 @@ server_setup()
         exit(1);
     }
 
-    printf("server: listening for connections...\n");
+    printf("server: listening for connections with socket FD %d...\n", sockfd);
 
     return sockfd;
 }
