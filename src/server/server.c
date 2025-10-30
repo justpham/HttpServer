@@ -212,6 +212,23 @@ accept_loop(int server_fd, int epoll_fd, struct conn *map)
         fprintf(stderr, "accept_loop(): Added FD %d to server\n", client_fd);
     }
 
+    /*
+        Current policy is to reject any new connections if the server is full.
+    */
+    while (
+        client_fd != -1 && 
+        get_conn_map_length(map, MAX_CONNECTIONS) >= MAX_CONNECTIONS
+    ) {
+        client_fd = accept_connection(server_fd);
+        if (errno == EAGAIN || errno == EWOULDBLOCK || client_fd == -1) {
+            /* no more pending connections */
+            break;
+        }
+        // Server is full, immediately close the connection, don't care to receive request from client
+        close(client_fd);
+        fprintf(stderr, "Server full, rejected connection on FD %d\n", client_fd);
+    }
+
     return 0;
 }
 
@@ -286,7 +303,6 @@ epoll_implementation(void)
             break;
         }
 
-        // TODO: Add timerfd
         if ((num_events = epoll_wait(epoll_fd, events, MAX_EPOLL_EVENTS, -1)) == -1) {
             perror("epoll_wait: ");
             unwind_server(SIGINT);
