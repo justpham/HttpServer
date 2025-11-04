@@ -13,7 +13,7 @@ CLIENT_INCLUDES = -I src$(SLASH)client$(SLASH)include
 SERVER_INCLUDES = -I src$(SLASH)server$(SLASH)include
 
 # Source Files
-COMMON_SOURCES = src$(SLASH)include$(SLASH)ip_helper.c src$(SLASH)include$(SLASH)cJSON.c src$(SLASH)include$(SLASH)http_parser.c src$(SLASH)include$(SLASH)http_lib.c src$(SLASH)include$(SLASH)http_builder.c src$(SLASH)include$(SLASH)random.c
+COMMON_SOURCES = src$(SLASH)include$(SLASH)ip_helper.c src$(SLASH)include$(SLASH)http_parser.c src$(SLASH)include$(SLASH)http_lib.c src$(SLASH)include$(SLASH)http_builder.c src$(SLASH)include$(SLASH)random.c
 CLIENT_SOURCES = src$(SLASH)client$(SLASH)include$(SLASH)connect.c $(COMMON_SOURCES)
 SERVER_SOURCES = src$(SLASH)server$(SLASH)include$(SLASH)routes.c src$(SLASH)server$(SLASH)include$(SLASH)connect.c src$(SLASH)server$(SLASH)include$(SLASH)conn_map.c  $(COMMON_SOURCES)
 
@@ -33,14 +33,14 @@ lint: format-check cppcheck
 
 format:
 	@echo "Formatting C source files..."
-	@find src -name "*.c" -not -path "*/cJSON.c" | xargs clang-format -i
-	@find src -name "*.h" -not -path "*/cJSON.h" | xargs clang-format -i
+	@find src -name "*.c" | xargs clang-format -i
+	@find src -name "*.h" | xargs clang-format -i
 	@echo "Formatting complete."
 
 format-check:
 	@echo "Checking code formatting..."
-	@find src -name "*.c" -not -path "*/cJSON.c" | xargs clang-format --dry-run --Werror
-	@find src -name "*.h" -not -path "*/cJSON.h" | xargs clang-format --dry-run --Werror
+	@find src -name "*.c" | xargs clang-format --dry-run --Werror
+	@find src -name "*.h" | xargs clang-format --dry-run --Werror
 	@echo "Format check passed."
 
 cppcheck:
